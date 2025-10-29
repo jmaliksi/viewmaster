@@ -20,6 +20,9 @@
   let mouseTimeout = null;
   let hasStarted = $state(false);
   
+  // Image preloading state
+  let nextRandomImage = $state(null);
+  
   // Timer state
   let isPlaying = $state(false);
   let timerSeconds = $state(30); // Default 30 seconds
@@ -155,6 +158,8 @@
   function startSession() {
     hasStarted = true;
     pickRandomImage();
+    // Preload a batch of images for smoother navigation
+    preloadBatch(5);
     // Start the timer
     isPlaying = true;
     startTimer();
@@ -166,8 +171,16 @@
       return;
     }
 
-    const randomIndex = Math.floor(Math.random() * images.images.length);
-    const newImage = images.images[randomIndex];
+    let newImage;
+    
+    // Use preloaded random image if available, otherwise pick a new one
+    if (nextRandomImage) {
+      newImage = nextRandomImage;
+      nextRandomImage = null; // Clear the used preloaded image
+    } else {
+      const randomIndex = Math.floor(Math.random() * images.images.length);
+      newImage = images.images[randomIndex];
+    }
     
     // Add new image to history
     imageHistory = [...imageHistory, newImage];
@@ -180,6 +193,23 @@
     }
     
     currentImage = newImage;
+    
+    // Preload adjacent images after setting current image
+    preloadAdjacentImages();
+    
+    // Preload the next random image that will be picked
+    preloadNextRandomImage();
+  }
+
+  function preloadNextRandomImage() {
+    if (!images || !images.images || images.images.length === 0) return;
+    
+    // Pick a random index for the next image and store it
+    const randomIndex = Math.floor(Math.random() * images.images.length);
+    nextRandomImage = images.images[randomIndex];
+    
+    // Preload the selected image
+    preloadImage(nextRandomImage.url);
   }
 
   function goToNextImage() {
@@ -223,10 +253,12 @@
     if (currentIndex === -1) {
       // If current image not found, go to first image
       currentImage = images.images[0];
+      preloadAdjacentImages();
       return;
     }
     const nextIndex = (currentIndex + 1) % images.images.length;
     currentImage = images.images[nextIndex];
+    preloadAdjacentImages();
   }
 
   function goToPreviousSequential() {
@@ -238,10 +270,12 @@
     if (currentIndex === -1) {
       // If current image not found, go to last image
       currentImage = images.images[images.images.length - 1];
+      preloadAdjacentImages();
       return;
     }
     const prevIndex = (currentIndex - 1 + images.images.length) % images.images.length;
     currentImage = images.images[prevIndex];
+    preloadAdjacentImages();
   }
 
   async function handleLogout() {
@@ -345,6 +379,44 @@
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // Image preloading functions
+  function preloadImage(url) {
+    const img = new Image();
+    img.src = url;
+  }
+
+  function preloadAdjacentImages() {
+    if (!images?.images || images.images.length === 0) return;
+
+    const currentIndex = getCurrentImageIndex();
+    if (currentIndex === -1) return;
+
+    const totalImages = images.images.length;
+    
+    // Preload next image
+    const nextIndex = (currentIndex + 1) % totalImages;
+    preloadImage(images.images[nextIndex].url);
+    
+    // Preload previous image
+    const prevIndex = (currentIndex - 1 + totalImages) % totalImages;
+    preloadImage(images.images[prevIndex].url);
+  }
+
+  function preloadBatch(count = 3) {
+    if (!images?.images || images.images.length === 0) return;
+
+    const currentIndex = getCurrentImageIndex();
+    if (currentIndex === -1) return;
+
+    const totalImages = images.images.length;
+    
+    // Preload 'count' images ahead
+    for (let i = 1; i <= count; i++) {
+      const nextIndex = (currentIndex + i) % totalImages;
+      preloadImage(images.images[nextIndex].url);
+    }
   }
 
   // Check route on mount and when path changes
