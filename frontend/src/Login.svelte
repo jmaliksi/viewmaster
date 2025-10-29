@@ -1,11 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { clearAuthCache } from './auth.js';
   
-  let username = '';
-  let password = '';
-  let error = '';
-  let loading = false;
+  let username = $state('');
+  let password = $state('');
+  let error = $state('');
+  let loading = $state(false);
 
   // Add login-page class to body for styling
   onMount(() => {
@@ -38,10 +37,7 @@
       const data = await response.json();
       
       // Token is now set as an HTTP-only cookie by the backend
-      // No need to manually store it in localStorage
-      // Clear any cached auth status to force re-check
-      clearAuthCache();
-      
+      // Cookie is automatically included in subsequent requests
       // Use pushState instead of location.href to avoid full page reload
       window.history.pushState({}, '', '/');
       // Trigger popstate to notify App.svelte of route change
@@ -69,14 +65,14 @@
       <div class="error-message">{error}</div>
     {/if}
 
-    <form on:submit|preventDefault={handleLogin}>
+    <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }}>
       <div class="form-group">
         <label for="username">Username</label>
         <input
           id="username"
           type="text"
           bind:value={username}
-          on:keypress={handleKeyPress}
+          onkeypress={handleKeyPress}
           disabled={loading}
           required
           autocomplete="username"
@@ -89,7 +85,7 @@
           id="password"
           type="password"
           bind:value={password}
-          on:keypress={handleKeyPress}
+          onkeypress={handleKeyPress}
           disabled={loading}
           required
           autocomplete="current-password"

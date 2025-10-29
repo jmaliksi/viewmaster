@@ -3,9 +3,15 @@
   import Login from './Login.svelte';
   import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
 
-  let authenticated = false;
-  let currentPath = '/';
-  let checkingAuth = true;
+  const IMAGES_STORAGE_KEY = 'viewmaster_images';
+
+  let authenticated = $state(false);
+  let currentPath = $state('/');
+  let checkingAuth = $state(true);
+  let images = $state(null);
+  let currentImage = $state(null);
+  let loadingImages = $state(false);
+  let imageError = $state(null);
 
   // Simple router
   async function checkRoute() {
@@ -29,11 +35,70 @@
       currentPath = '/';
       authenticated = true;
       checkingAuth = false;
+      // Load images after authentication
+      await loadImages();
       return;
     }
 
     authenticated = authStatus;
     checkingAuth = false;
+    
+    // If authenticated and not on login page, load images
+    if (authenticated && currentPath !== '/login') {
+      await loadImages();
+    }
+  }
+
+  async function loadImages() {
+    // Check localStorage first
+    const stored = localStorage.getItem(IMAGES_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        images = parsed;
+        pickRandomImage();
+        return;
+      } catch (e) {
+        console.error('Error parsing stored images:', e);
+        localStorage.removeItem(IMAGES_STORAGE_KEY);
+      }
+    }
+
+    // Fetch from API
+    loadingImages = true;
+    imageError = null;
+
+    try {
+      const response = await fetch('/api/load', {
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load images: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Store in localStorage
+      localStorage.setItem(IMAGES_STORAGE_KEY, JSON.stringify(data));
+      images = data;
+      pickRandomImage();
+    } catch (err) {
+      console.error('Error loading images:', err);
+      imageError = err.message || 'Failed to load images';
+    } finally {
+      loadingImages = false;
+    }
+  }
+
+  function pickRandomImage() {
+    if (!images || !images.images || images.images.length === 0) {
+      currentImage = null;
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * images.images.length);
+    currentImage = images.images[randomIndex];
   }
 
   async function handleLogout() {
@@ -47,9 +112,12 @@
       console.error('Logout error:', err);
     }
     
-    // Clear auth cache
+    // Clear auth cache and images
     clearAuthCache();
+    localStorage.removeItem(IMAGES_STORAGE_KEY);
     authenticated = false;
+    images = null;
+    currentImage = null;
     
     // Redirect to login
     window.history.pushState({}, '', '/login');
@@ -75,13 +143,31 @@
   <main>
     <header>
       <h1>ViewMaster</h1>
-      <button class="logout-btn" on:click={handleLogout}>Logout</button>
+      <button class="logout-btn" onclick={handleLogout}>Logout</button>
     </header>
     <div class="content">
-      <p class="read-the-docs">
-        FastAPI + Svelte integration
-      </p>
-      <p>You are authenticated and can access protected endpoints.</p>
+      {#if checkingAuth}
+        <p>Checking authentication...</p>
+      {:else if loadingImages}
+        <p>Loading images...</p>
+      {:else if imageError}
+        <div class="error-message">
+          <p>Error: {imageError}</p>
+          <button onclick={loadImages}>Retry</button>
+        </div>
+      {:else if currentImage}
+        <div class="image-container">
+          <img 
+            src={currentImage.url} 
+            alt={currentImage.filename}
+            class="display-image"
+          />
+        </div>
+      {:else if images && images.images && images.images.length === 0}
+        <p>No images available.</p>
+      {:else}
+        <p>Loading...</p>
+      {/if}
     </div>
   </main>
 {/if}

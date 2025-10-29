@@ -16,8 +16,16 @@ export function removeAuthToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export function isAuthenticated() {
-  return getAuthToken() !== null;
+export async function isAuthenticated() {
+  // Since we're using HTTP-only cookies, check authentication via API
+  try {
+    const response = await fetch('/api/me', {
+      credentials: 'include', // Include cookies
+    });
+    return response.ok;
+  } catch (err) {
+    return false;
+  }
 }
 
 export function getAuthHeaders() {
@@ -28,6 +36,10 @@ export function getAuthHeaders() {
   return {
     'Authorization': `Bearer ${token}`,
   };
+}
+
+export function clearAuthCache() {
+  removeAuthToken();
 }
 
 export async function authenticatedFetch(url, options = {}) {
