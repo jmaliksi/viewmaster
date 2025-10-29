@@ -5,6 +5,7 @@
 
   const IMAGES_STORAGE_KEY = 'viewmaster_images';
   const MAX_HISTORY_SIZE = 50;
+  const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
   let authenticated = $state(false);
   let currentPath = $state('/');
@@ -15,6 +16,8 @@
   let imageError = $state(null);
   let imageHistory = $state([]);
   let historyIndex = $state(-1);
+  let mouseActive = $state(true);
+  let mouseTimeout = null;
 
   // Simple router
   async function checkRoute() {
@@ -117,6 +120,7 @@
   }
 
   function goToNextImage() {
+    resetMouseTimeout();
     // If we're not at the end of history, go forward
     if (historyIndex < imageHistory.length - 1) {
       historyIndex++;
@@ -128,10 +132,48 @@
   }
 
   function goToPreviousImage() {
+    resetMouseTimeout();
     if (historyIndex > 0) {
       historyIndex--;
       currentImage = imageHistory[historyIndex];
     }
+  }
+
+  function getCurrentImageIndex() {
+    if (!currentImage || !images || !images.images) {
+      return -1;
+    }
+    return images.images.findIndex(img => img.url === currentImage.url);
+  }
+
+  function goToNextSequential() {
+    resetMouseTimeout();
+    if (!images || !images.images || images.images.length === 0) {
+      return;
+    }
+    const currentIndex = getCurrentImageIndex();
+    if (currentIndex === -1) {
+      // If current image not found, go to first image
+      currentImage = images.images[0];
+      return;
+    }
+    const nextIndex = (currentIndex + 1) % images.images.length;
+    currentImage = images.images[nextIndex];
+  }
+
+  function goToPreviousSequential() {
+    resetMouseTimeout();
+    if (!images || !images.images || images.images.length === 0) {
+      return;
+    }
+    const currentIndex = getCurrentImageIndex();
+    if (currentIndex === -1) {
+      // If current image not found, go to last image
+      currentImage = images.images[images.images.length - 1];
+      return;
+    }
+    const prevIndex = (currentIndex - 1 + images.images.length) % images.images.length;
+    currentImage = images.images[prevIndex];
   }
 
   async function handleLogout() {
@@ -159,15 +201,35 @@
     currentPath = '/login';
   }
 
+  function resetMouseTimeout() {
+    mouseActive = true;
+    if (mouseTimeout) {
+      clearTimeout(mouseTimeout);
+    }
+    mouseTimeout = setTimeout(() => {
+      mouseActive = false;
+    }, MOUSE_INACTIVITY_TIMEOUT);
+  }
+
   // Check route on mount and when path changes
   onMount(() => {
     checkRoute();
     
     // Listen for popstate events (back/forward navigation)
     window.addEventListener('popstate', checkRoute);
+    
+    // Track mouse activity
+    resetMouseTimeout();
+    window.addEventListener('mousemove', resetMouseTimeout);
+    window.addEventListener('mouseenter', resetMouseTimeout);
 
     return () => {
       window.removeEventListener('popstate', checkRoute);
+      window.removeEventListener('mousemove', resetMouseTimeout);
+      window.removeEventListener('mouseenter', resetMouseTimeout);
+      if (mouseTimeout) {
+        clearTimeout(mouseTimeout);
+      }
     };
   });
 </script>
@@ -175,8 +237,8 @@
 {#if !authenticated || currentPath === '/login'}
   <Login />
 {:else}
-  <main>
-    <header>
+  <main onmouseenter={resetMouseTimeout} onmousemove={resetMouseTimeout}>
+    <header class:inactive={!mouseActive}>
       <h1>ViewMaster</h1>
       <div class="header-actions">
         <button 
@@ -208,11 +270,29 @@
         </div>
       {:else if currentImage}
         <div class="image-container">
+          <button 
+            class="arrow-btn left-arrow" 
+            class:inactive={!mouseActive}
+            onclick={goToPreviousSequential}
+            disabled={!images || !images.images || images.images.length === 0}
+            aria-label="Previous image"
+          >
+            ←
+          </button>
           <img 
             src={currentImage.url} 
             alt={currentImage.filename}
             class="display-image"
           />
+          <button 
+            class="arrow-btn right-arrow" 
+            class:inactive={!mouseActive}
+            onclick={goToNextSequential}
+            disabled={!images || !images.images || images.images.length === 0}
+            aria-label="Next image"
+          >
+            →
+          </button>
         </div>
       {:else if images && images.images && images.images.length === 0}
         <p>No images available.</p>
