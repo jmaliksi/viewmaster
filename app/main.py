@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import api
@@ -26,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure compression - compress responses larger than 1000 bytes
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API router
 app.include_router(api.router)

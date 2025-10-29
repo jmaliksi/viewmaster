@@ -5,7 +5,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote, unquote
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from fastapi.security import HTTPBearer
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -192,9 +192,14 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
 
 
 @router.get("/images/{image_path:path}")
-async def serve_image(image_path: str, current_user: dict = Depends(get_current_user)):
+async def serve_image(
+    image_path: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Serve an image file. Requires authentication.
+    Serve an image file with ETag support for efficient caching.
+    Requires authentication.
     The image_path should be URL-encoded path segments.
     """
     images_dir = get_images_directory()
@@ -219,6 +224,25 @@ async def serve_image(image_path: str, current_user: dict = Depends(get_current_
     if image_file.suffix.lower() not in IMAGE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Not an image file")
     
+    # Get file metadata for ETag generation
+    stat = image_file.stat()
+    
+    # Generate ETag from file modification time and size
+    # This ensures ETag changes when file is updated or replaced
+    etag = f'"{stat.st_mtime}-{stat.st_size}"'
+    
+    # Check If-None-Match header for conditional request
+    if_none_match = request.headers.get("If-None-Match")
+    if if_none_match == etag:
+        # File hasn't changed - return 304 Not Modified
+        return Response(
+            status_code=304,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "public, max-age=31536000, immutable",
+            }
+        )
+    
     # Determine content type based on extension
     content_type_map = {
         ".jpg": "image/jpeg",
@@ -235,8 +259,13 @@ async def serve_image(image_path: str, current_user: dict = Depends(get_current_
     
     content_type = content_type_map.get(image_file.suffix.lower(), "image/jpeg")
     
+    # Return file with ETag and improved cache headers
+    # Using immutable cache since images don't change once loaded
     return FileResponse(
         str(image_file),
         media_type=content_type,
-        headers={"Cache-Control": "public, max-age=3600"}
+        headers={
+            "ETag": etag,
+            "Cache-Control": "public, max-age=31536000, immutable",
+        }
     )
