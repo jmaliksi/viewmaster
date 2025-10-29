@@ -5,7 +5,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote, unquote
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from fastapi.security import HTTPBearer
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from app.auth import (
     create_access_token,
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    BEARER_TOKEN_COOKIE_NAME,
 )
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -49,8 +50,12 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(login_data: LoginRequest):
-    """Login endpoint - returns JWT token"""
+async def login(login_data: LoginRequest, response: Response):
+    """
+    Login endpoint - returns JWT token.
+    Sets the token as an HTTP-only cookie for security.
+    Also returns the token in the response body for compatibility.
+    """
     user = authenticate_user(login_data.username, login_data.password)
     if not user:
         raise HTTPException(
@@ -62,7 +67,35 @@ async def login(login_data: LoginRequest):
     access_token = create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
+    
+    # Set token as HTTP-only cookie for security (prevents XSS attacks)
+    # Calculate max_age in seconds (same as token expiration)
+    max_age_seconds = int(access_token_expires.total_seconds())
+    response.set_cookie(
+        key=BEARER_TOKEN_COOKIE_NAME,
+        value=access_token,
+        max_age=max_age_seconds,
+        httponly=True,  # Prevents JavaScript access (security)
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",  # CSRF protection
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """
+    Logout endpoint - clears the authentication cookie.
+    """
+    # Clear the cookie by setting it with an expired date
+    response.delete_cookie(
+        key=BEARER_TOKEN_COOKIE_NAME,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+    )
+    return {"message": "Successfully logged out"}
 
 
 @router.get("/")
@@ -80,6 +113,18 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@router.get("/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """
+    Get current authenticated user information.
+    Lightweight endpoint for checking authentication status.
+    """
+    return {
+        "username": current_user.get("username"),
+        "authenticated": True,
+    }
+
+
 @router.get("/load")
 async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
@@ -92,7 +137,6 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
         - total_images: Total number of images found
         - images: List of image file information
     """
-    print(current_user)
     # Resolve the images directory path
     images_dir = get_images_directory()
     

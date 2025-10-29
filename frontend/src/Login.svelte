@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { isAuthenticated, setAuthToken } from './auth.js';
+  import { clearAuthCache } from './auth.js';
   
   let username = '';
   let password = '';
@@ -26,6 +26,7 @@
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies in request (important!)
         body: JSON.stringify({ username, password }),
       });
 
@@ -35,12 +36,11 @@
       }
 
       const data = await response.json();
-      setAuthToken(data.access_token);
       
-      // Verify token was stored before navigating
-      if (!data.access_token) {
-        throw new Error('No access token received');
-      }
+      // Token is now set as an HTTP-only cookie by the backend
+      // No need to manually store it in localStorage
+      // Clear any cached auth status to force re-check
+      clearAuthCache();
       
       // Use pushState instead of location.href to avoid full page reload
       window.history.pushState({}, '', '/');

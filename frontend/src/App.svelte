@@ -1,38 +1,59 @@
 <script>
   import { onMount } from 'svelte';
   import Login from './Login.svelte';
-  import { isAuthenticated, authenticatedFetch, removeAuthToken } from './auth.js';
+  import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
 
   let authenticated = false;
   let currentPath = '/';
+  let checkingAuth = true;
 
   // Simple router
-  function checkRoute() {
+  async function checkRoute() {
     currentPath = window.location.pathname;
     
+    // Check authentication status
+    const authStatus = await isAuthenticated();
+    
     // If not authenticated and not on login page, redirect to login
-    if (!isAuthenticated() && currentPath !== '/login') {
+    if (!authStatus && currentPath !== '/login') {
       window.history.pushState({}, '', '/login');
       currentPath = '/login';
       authenticated = false;
+      checkingAuth = false;
       return;
     }
 
     // If authenticated and on login page, redirect to home
-    if (isAuthenticated() && currentPath === '/login') {
+    if (authStatus && currentPath === '/login') {
       window.history.pushState({}, '', '/');
       currentPath = '/';
       authenticated = true;
+      checkingAuth = false;
       return;
     }
 
-    authenticated = isAuthenticated();
+    authenticated = authStatus;
+    checkingAuth = false;
   }
 
   async function handleLogout() {
-    removeAuthToken();
+    try {
+      // Call logout endpoint to clear cookie
+      await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include', // Include cookies
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    
+    // Clear auth cache
+    clearAuthCache();
+    authenticated = false;
+    
+    // Redirect to login
     window.history.pushState({}, '', '/login');
-    checkRoute();
+    currentPath = '/login';
   }
 
   // Check route on mount and when path changes
