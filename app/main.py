@@ -1,8 +1,12 @@
 """
 FastAPI application entry point
 """
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from app.routers import api
 
 app = FastAPI(
     title="ViewMaster API",
@@ -19,18 +23,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include API router
+app.include_router(api.router)
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "Welcome to ViewMaster API",
-        "docs": "/docs",
-        "version": "1.0.0"
-    }
+# Mount static files directory
+static_dir = Path(__file__).parent.parent / "static"
+if static_dir.exists():
+    # Mount assets directory (JS, CSS files from Vite build)
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # Mount root static files (favicon, etc.)
+    # Serve files from static root, but exclude index.html (handled by catch-all)
+    static_files = StaticFiles(directory=str(static_dir), html=False)
+    app.mount("/static", static_files, name="static")
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+# SPA catch-all route - must be last
+@app.get("/{full_path:path}")
+async def serve_spa(request: Request, full_path: str):
+    """
+    Serve the Svelte SPA for all non-API routes.
+    This allows client-side routing to work properly.
+    """
+    # Don't interfere with API routes, static assets, or docs
+    if (
+        full_path.startswith("api/")
+        or full_path.startswith("assets/")
+        or full_path.startswith("static/")
+        or full_path.startswith("docs")
+        or full_path.startswith("openapi.json")
+        or full_path.startswith("redoc")
+    ):
+        return {"error": "Not found"}
+
+    # Serve index.html for SPA routing
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+
+    return {"error": "Frontend not built. Run 'npm run build' in the frontend directory."}

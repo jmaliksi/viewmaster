@@ -1,0 +1,13 @@
+{
+  "name": "viewmaster",
+  "version": "1.0.0",
+  "description": "ViewMaster - FastAPI + Svelte full-stack application",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "uvicorn main:app --reload",
+    "build": "cd frontend && npm run build",
+    "install:frontend": "cd frontend && npm install"
+  },
+  "private": true
+}
+

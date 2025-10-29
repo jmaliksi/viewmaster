@@ -209,3 +209,15 @@ pyrightconfig.json
 
 .svelte-kit/
 package
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output
+static/
+frontend/dist/
+frontend/.svelte-kit/
