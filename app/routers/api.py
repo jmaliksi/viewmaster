@@ -11,7 +11,6 @@ async def root():
     """Root endpoint"""
     return {
         "message": "Welcome to ViewMaster API",
-        "docs": "/docs",
         "version": "1.0.0"
     }
 

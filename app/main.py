@@ -11,7 +11,10 @@ from app.routers import api
 app = FastAPI(
     title="ViewMaster API",
     description="A FastAPI web application",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url=None,  # Disable Swagger UI
+    redoc_url=None,  # Disable ReDoc
+    openapi_url=None,  # Disable OpenAPI schema endpoint
 )
 
 # Configure CORS
@@ -47,14 +50,11 @@ async def serve_spa(request: Request, full_path: str):
     Serve the Svelte SPA for all non-API routes.
     This allows client-side routing to work properly.
     """
-    # Don't interfere with API routes, static assets, or docs
+    # Don't interfere with API routes or static assets
     if (
         full_path.startswith("api/")
         or full_path.startswith("assets/")
         or full_path.startswith("static/")
-        or full_path.startswith("docs")
-        or full_path.startswith("openapi.json")
-        or full_path.startswith("redoc")
     ):
         return {"error": "Not found"}
 
