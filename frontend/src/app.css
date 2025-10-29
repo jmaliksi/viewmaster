@@ -153,6 +153,7 @@ header:hover > * {
 .play-pause-btn,
 .prev-btn,
 .next-btn,
+.fullscreen-btn,
 .logout-btn {
   border-radius: var(--border-radius);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -164,6 +165,12 @@ header:hover > * {
   color: white;
   cursor: pointer;
   transition: background-color 0.25s, border-color 0.25s;
+}
+
+.fullscreen-btn {
+  font-size: 1.1em;
+  padding: var(--spacing-sm) 0.9em;
+  min-width: 2.5em;
 }
 
 .play-pause-btn {
@@ -225,6 +232,7 @@ header:hover > * {
 
 .timer-input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .timer-input:focus {
@@ -241,6 +249,7 @@ header:hover > * {
 .play-pause-btn:hover:not(:disabled),
 .prev-btn:hover:not(:disabled),
 .next-btn:hover:not(:disabled),
+.fullscreen-btn:hover,
 .logout-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.5);
@@ -291,6 +300,39 @@ header:hover > * {
   min-height: 0;
   overflow: hidden;
   padding: 0;
+}
+
+.start-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.start-btn {
+  padding: 1.2em 3em;
+  font-size: 1.8em;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  transition: background-color 0.25s, border-color 0.25s, transform 0.1s;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.start-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.05);
+}
+
+.start-btn:active {
+  transform: scale(0.98);
 }
 
 .image-container {

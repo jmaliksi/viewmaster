@@ -18,6 +18,7 @@
   let historyIndex = $state(-1);
   let mouseActive = $state(true);
   let mouseTimeout = null;
+  let hasStarted = $state(false);
   
   // Timer state
   let isPlaying = $state(false);
@@ -26,6 +27,54 @@
   let timerInterval = null;
   let isEditingTimer = $state(false);
   let timerInputValue = $state('30');
+  let isFullscreen = $state(false);
+
+  // Fullscreen functionality
+  function toggleFullscreen() {
+    const doc = document;
+    const docEl = doc.documentElement;
+    
+    const isFullscreenActive = 
+      doc.fullscreenElement || 
+      doc.webkitFullscreenElement || 
+      doc.mozFullScreenElement || 
+      doc.msFullscreenElement;
+    
+    if (!isFullscreenActive) {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(err => {
+          console.error('Error attempting to enable fullscreen:', err);
+        });
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+      }
+    } else {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(err => {
+          console.error('Error attempting to exit fullscreen:', err);
+        });
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
+      }
+    }
+  }
+
+  function handleFullscreenChange() {
+    isFullscreen = !!(
+      document.fullscreenElement || 
+      document.webkitFullscreenElement || 
+      document.mozFullScreenElement || 
+      document.msFullscreenElement
+    );
+  }
 
   // Simple router
   async function checkRoute() {
@@ -70,7 +119,6 @@
       try {
         const parsed = JSON.parse(stored);
         images = parsed;
-        pickRandomImage();
         return;
       } catch (e) {
         console.error('Error parsing stored images:', e);
@@ -96,13 +144,20 @@
       // Store in localStorage
       localStorage.setItem(IMAGES_STORAGE_KEY, JSON.stringify(data));
       images = data;
-      pickRandomImage();
     } catch (err) {
       console.error('Error loading images:', err);
       imageError = err.message || 'Failed to load images';
     } finally {
       loadingImages = false;
     }
+  }
+
+  function startSession() {
+    hasStarted = true;
+    pickRandomImage();
+    // Start the timer
+    isPlaying = true;
+    startTimer();
   }
 
   function pickRandomImage() {
@@ -129,6 +184,7 @@
 
   function goToNextImage() {
     resetMouseTimeout();
+    hasStarted = true;
     // If we're not at the end of history, go forward
     if (historyIndex < imageHistory.length - 1) {
       historyIndex++;
@@ -207,6 +263,7 @@
     currentImage = null;
     imageHistory = [];
     historyIndex = -1;
+    hasStarted = false;
     
     // Redirect to login
     window.history.pushState({}, '', '/login');
@@ -302,10 +359,23 @@
     window.addEventListener('mousemove', resetMouseTimeout);
     window.addEventListener('mouseenter', resetMouseTimeout);
 
+    // Listen for fullscreen changes
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    // Check initial fullscreen state
+    handleFullscreenChange();
+
     return () => {
       window.removeEventListener('popstate', checkRoute);
       window.removeEventListener('mousemove', resetMouseTimeout);
       window.removeEventListener('mouseenter', resetMouseTimeout);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       if (mouseTimeout) {
         clearTimeout(mouseTimeout);
       }
@@ -378,6 +448,14 @@
         </div>
       </div>
       <div class="header-actions">
+        <button 
+          class="fullscreen-btn" 
+          onclick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          {isFullscreen ? '⤓' : '⤢'}
+        </button>
         <button class="logout-btn" onclick={handleLogout}>Logout</button>
       </div>
     </header>
@@ -390,6 +468,12 @@
         <div class="error-message">
           <p>Error: {imageError}</p>
           <button onclick={loadImages}>Retry</button>
+        </div>
+      {:else if !hasStarted && images && images.images && images.images.length > 0}
+        <div class="start-container">
+          <button class="start-btn" onclick={startSession}>
+            Start
+          </button>
         </div>
       {:else if currentImage}
         <div class="image-container">
