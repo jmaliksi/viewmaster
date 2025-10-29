@@ -4,6 +4,7 @@
   import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
 
   const IMAGES_STORAGE_KEY = 'viewmaster_images';
+  const MAX_HISTORY_SIZE = 50;
 
   let authenticated = $state(false);
   let currentPath = $state('/');
@@ -12,6 +13,8 @@
   let currentImage = $state(null);
   let loadingImages = $state(false);
   let imageError = $state(null);
+  let imageHistory = $state([]);
+  let historyIndex = $state(-1);
 
   // Simple router
   async function checkRoute() {
@@ -98,7 +101,37 @@
     }
 
     const randomIndex = Math.floor(Math.random() * images.images.length);
-    currentImage = images.images[randomIndex];
+    const newImage = images.images[randomIndex];
+    
+    // Add new image to history
+    imageHistory = [...imageHistory, newImage];
+    historyIndex = imageHistory.length - 1;
+    
+    // Keep history bounded
+    if (imageHistory.length > MAX_HISTORY_SIZE) {
+      imageHistory = imageHistory.slice(-MAX_HISTORY_SIZE);
+      historyIndex = imageHistory.length - 1;
+    }
+    
+    currentImage = newImage;
+  }
+
+  function goToNextImage() {
+    // If we're not at the end of history, go forward
+    if (historyIndex < imageHistory.length - 1) {
+      historyIndex++;
+      currentImage = imageHistory[historyIndex];
+    } else {
+      // Otherwise, pick a new random image
+      pickRandomImage();
+    }
+  }
+
+  function goToPreviousImage() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      currentImage = imageHistory[historyIndex];
+    }
   }
 
   async function handleLogout() {
@@ -118,6 +151,8 @@
     authenticated = false;
     images = null;
     currentImage = null;
+    imageHistory = [];
+    historyIndex = -1;
     
     // Redirect to login
     window.history.pushState({}, '', '/login');
@@ -143,7 +178,23 @@
   <main>
     <header>
       <h1>ViewMaster</h1>
-      <button class="logout-btn" onclick={handleLogout}>Logout</button>
+      <div class="header-actions">
+        <button 
+          class="prev-btn" 
+          onclick={goToPreviousImage}
+          disabled={historyIndex <= 0}
+        >
+          Prev
+        </button>
+        <button 
+          class="next-btn" 
+          onclick={goToNextImage}
+          disabled={!images || !images.images || images.images.length === 0}
+        >
+          Next
+        </button>
+        <button class="logout-btn" onclick={handleLogout}>Logout</button>
+      </div>
     </header>
     <div class="content">
       {#if checkingAuth}
