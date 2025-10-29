@@ -221,3 +221,4 @@ yarn-error.log*
 static/
 frontend/dist/
 frontend/.svelte-kit/
+images/

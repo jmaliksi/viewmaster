@@ -1,6 +1,7 @@
 """
 FastAPI application entry point
 """
+import os
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,17 @@ app.add_middleware(
 
 # Include API router
 app.include_router(api.router)
+
+# Mount images directory for serving
+images_dir_str = os.getenv("IMAGES_DIRECTORY", "images")
+project_root = Path(__file__).parent.parent
+if os.path.isabs(images_dir_str):
+    images_dir = Path(images_dir_str)
+else:
+    images_dir = project_root / images_dir_str
+
+if images_dir.exists() and images_dir.is_dir():
+    app.mount("/api/images", StaticFiles(directory=str(images_dir)), name="images")
 
 # Mount static files directory
 static_dir = Path(__file__).parent.parent / "static"
