@@ -1,85 +1,66 @@
 <script>
   import { onMount } from 'svelte';
+  import Login from './Login.svelte';
+  import { isAuthenticated, authenticatedFetch, removeAuthToken } from './auth.js';
 
-  let count = 0;
+  let authenticated = false;
+  let currentPath = '/';
 
-  async function fetchHealth() {
-    try {
-      const response = await fetch('/api/health');
-      const data = await response.json();
-      console.log('Health check:', data);
-    } catch (error) {
-      console.error('Error fetching health:', error);
+  // Simple router
+  function checkRoute() {
+    currentPath = window.location.pathname;
+    
+    // If not authenticated and not on login page, redirect to login
+    if (!isAuthenticated() && currentPath !== '/login') {
+      window.history.pushState({}, '', '/login');
+      currentPath = '/login';
+      authenticated = false;
+      return;
     }
+
+    // If authenticated and on login page, redirect to home
+    if (isAuthenticated() && currentPath === '/login') {
+      window.history.pushState({}, '', '/');
+      currentPath = '/';
+      authenticated = true;
+      return;
+    }
+
+    authenticated = isAuthenticated();
   }
 
-  // Fetch health on mount
+  async function handleLogout() {
+    removeAuthToken();
+    window.history.pushState({}, '', '/login');
+    checkRoute();
+  }
+
+  // Check route on mount and when path changes
   onMount(() => {
-    fetchHealth();
+    checkRoute();
+    
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', checkRoute);
+
+    return () => {
+      window.removeEventListener('popstate', checkRoute);
+    };
   });
 </script>
 
-<main>
-  <h1>ViewMaster</h1>
-  <div class="card">
-    <button on:click={() => count++}>
-      count is {count}
-    </button>
-  </div>
-  <p class="read-the-docs">
-    FastAPI + Svelte integration
-  </p>
-</main>
-
-<style>
-  :global(body) {
-    margin: 0;
-    display: flex;
-    place-items: center;
-    min-width: 320px;
-    min-height: 100vh;
-  }
-
-  :global(#app) {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  h1 {
-    font-size: 3.2em;
-    line-height: 1.1;
-  }
-
-  .card {
-    padding: 2em;
-  }
-
-  button {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    background-color: #1a1a1a;
-    color: white;
-    cursor: pointer;
-    transition: border-color 0.25s;
-  }
-
-  button:hover {
-    border-color: #646cff;
-  }
-
-  button:focus,
-  button:focus-visible {
-    outline: 4px auto -webkit-focus-ring-color;
-  }
-
-  .read-the-docs {
-    color: #888;
-  }
-</style>
-
+{#if !authenticated || currentPath === '/login'}
+  <Login />
+{:else}
+  <main>
+    <header>
+      <h1>ViewMaster</h1>
+      <button class="logout-btn" on:click={handleLogout}>Logout</button>
+    </header>
+    <div class="content">
+      <p class="read-the-docs">
+        FastAPI + Svelte integration
+      </p>
+      <p>You are authenticated and can access protected endpoints.</p>
+    </div>
+  </main>
+{/if}
