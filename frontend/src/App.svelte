@@ -419,6 +419,34 @@
     }
   }
 
+  // Keyboard controls
+  function handleKeydown(event) {
+    // Only handle keyboard shortcuts when authenticated and not on login page
+    if (!authenticated || currentPath === '/login') return;
+    
+    // Don't handle keyboard shortcuts when editing timer
+    if (isEditingTimer) return;
+    
+    switch (event.key) {
+      case ' ':
+        event.preventDefault();
+        togglePlayPause();
+        break;
+      case 'ArrowRight':
+        event.preventDefault();
+        goToNextSequential();
+        break;
+      case 'ArrowLeft':
+        event.preventDefault();
+        goToPreviousSequential();
+        break;
+      case 'Enter':
+        event.preventDefault();
+        goToNextImage();
+        break;
+    }
+  }
+
   // Check route on mount and when path changes
   onMount(() => {
     checkRoute();
@@ -437,6 +465,9 @@
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     
+    // Listen for keyboard events
+    document.addEventListener('keydown', handleKeydown);
+    
     // Check initial fullscreen state
     handleFullscreenChange();
 
@@ -448,6 +479,7 @@
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      document.removeEventListener('keydown', handleKeydown);
       if (mouseTimeout) {
         clearTimeout(mouseTimeout);
       }
