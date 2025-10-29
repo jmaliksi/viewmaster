@@ -18,6 +18,14 @@
   let historyIndex = $state(-1);
   let mouseActive = $state(true);
   let mouseTimeout = null;
+  
+  // Timer state
+  let isPlaying = $state(false);
+  let timerSeconds = $state(30); // Default 30 seconds
+  let timeRemaining = $state(30);
+  let timerInterval = null;
+  let isEditingTimer = $state(false);
+  let timerInputValue = $state('30');
 
   // Simple router
   async function checkRoute() {
@@ -129,6 +137,10 @@
       // Otherwise, pick a new random image
       pickRandomImage();
     }
+    // Reset timer when image changes if playing
+    if (isPlaying) {
+      timeRemaining = timerSeconds;
+    }
   }
 
   function goToPreviousImage() {
@@ -211,6 +223,73 @@
     }, MOUSE_INACTIVITY_TIMEOUT);
   }
 
+  function startTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+    timerInterval = setInterval(() => {
+      if (timeRemaining > 0) {
+        timeRemaining--;
+      } else {
+        // Timer expired - go to next image (which will reset timer)
+        goToNextImage();
+      }
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function togglePlayPause() {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      startTimer();
+    } else {
+      stopTimer();
+    }
+  }
+
+  function handleTimerInputChange(e) {
+    const value = e.target.value;
+    timerInputValue = value;
+    const numValue = parseInt(value, 10);
+    if (!isNaN(numValue) && numValue > 0) {
+      timerSeconds = numValue;
+      if (!isPlaying) {
+        timeRemaining = numValue;
+      }
+    }
+  }
+
+  function handleTimerInputBlur() {
+    isEditingTimer = false;
+    const numValue = parseInt(timerInputValue, 10);
+    if (isNaN(numValue) || numValue <= 0) {
+      // Reset to previous valid value
+      timerInputValue = timerSeconds.toString();
+      timeRemaining = timerSeconds;
+    } else {
+      timerSeconds = numValue;
+      timeRemaining = numValue;
+    }
+  }
+
+  function handleTimerInputFocus() {
+    if (!isPlaying) {
+      isEditingTimer = true;
+    }
+  }
+
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
   // Check route on mount and when path changes
   onMount(() => {
     checkRoute();
@@ -230,6 +309,7 @@
       if (mouseTimeout) {
         clearTimeout(mouseTimeout);
       }
+      stopTimer();
     };
   });
 </script>
@@ -240,21 +320,64 @@
   <main onmouseenter={resetMouseTimeout} onmousemove={resetMouseTimeout}>
     <header class:inactive={!mouseActive}>
       <h1>ViewMaster</h1>
+      <div class="header-center">
+        <div class="playback-controls">
+          <button 
+            class="prev-btn" 
+            onclick={goToPreviousImage}
+            disabled={historyIndex <= 0}
+          >
+            Prev
+          </button>
+          <button 
+            class="play-pause-btn" 
+            onclick={togglePlayPause}
+            disabled={!images || !images.images || images.images.length === 0}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <div class="timer-container">
+            {#if isEditingTimer && !isPlaying}
+              <input
+                type="number"
+                class="timer-input"
+                value={timerInputValue}
+                min="1"
+                max="600"
+                oninput={handleTimerInputChange}
+                onblur={handleTimerInputBlur}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.target.blur();
+                  } else if (e.key === 'Escape') {
+                    timerInputValue = timerSeconds.toString();
+                    e.target.blur();
+                  }
+                }}
+              />
+              <span class="timer-label">s</span>
+            {:else}
+              <button
+                class="timer-display"
+                onclick={handleTimerInputFocus}
+                disabled={isPlaying}
+                aria-label="Edit timer duration"
+              >
+                {formatTime(timeRemaining)}
+              </button>
+            {/if}
+          </div>
+          <button 
+            class="next-btn" 
+            onclick={goToNextImage}
+            disabled={!images || !images.images || images.images.length === 0}
+          >
+            Next
+          </button>
+        </div>
+      </div>
       <div class="header-actions">
-        <button 
-          class="prev-btn" 
-          onclick={goToPreviousImage}
-          disabled={historyIndex <= 0}
-        >
-          Prev
-        </button>
-        <button 
-          class="next-btn" 
-          onclick={goToNextImage}
-          disabled={!images || !images.images || images.images.length === 0}
-        >
-          Next
-        </button>
         <button class="logout-btn" onclick={handleLogout}>Logout</button>
       </div>
     </header>

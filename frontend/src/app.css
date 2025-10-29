@@ -100,8 +100,8 @@ header {
   top: 0;
   left: 0;
   right: 0;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: var(--spacing-lg) var(--spacing-xl);
   background-color: rgba(26, 26, 26, 0.85);
@@ -131,12 +131,26 @@ header:hover > * {
   pointer-events: auto;
 }
 
-.header-actions {
+.header-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.playback-controls {
   display: flex;
   gap: var(--spacing-md);
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.play-pause-btn,
 .prev-btn,
 .next-btn,
 .logout-btn {
@@ -152,6 +166,79 @@ header:hover > * {
   transition: background-color 0.25s, border-color 0.25s;
 }
 
+.play-pause-btn {
+  font-size: 1.1em;
+  padding: var(--spacing-sm) 0.9em;
+  min-width: 2.5em;
+}
+
+.timer-container {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.timer-display {
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: var(--spacing-sm) 0.9em;
+  font-size: 0.9em;
+  font-weight: 500;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: transparent;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.25s, border-color 0.25s;
+  min-width: 3.5em;
+  text-align: center;
+}
+
+.timer-display:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.timer-display:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.timer-input {
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: var(--spacing-sm) 0.6em;
+  font-size: 0.9em;
+  font-weight: 500;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  width: 3em;
+  text-align: center;
+  outline: none;
+}
+
+.timer-input::-webkit-outer-spin-button,
+.timer-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.timer-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.timer-input:focus {
+  border-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.timer-label {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.play-pause-btn:hover:not(:disabled),
 .prev-btn:hover:not(:disabled),
 .next-btn:hover:not(:disabled),
 .logout-btn:hover {
@@ -159,6 +246,7 @@ header:hover > * {
   border-color: rgba(255, 255, 255, 0.5);
 }
 
+.play-pause-btn:disabled,
 .prev-btn:disabled,
 .next-btn:disabled {
   opacity: 0.5;
