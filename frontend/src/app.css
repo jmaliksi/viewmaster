@@ -501,6 +501,8 @@ footer.bottom-bar:hover {
   z-index: 200;
   pointer-events: none;
   /* Keep transparent so image is visible behind */
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .drawing-overlay canvas {
@@ -511,6 +513,7 @@ footer.bottom-bar:hover {
 
 .drawing-overlay.active {
   pointer-events: auto; /* Enable drawing interactions when active */
+  touch-action: none;
 }
 
 .login-container {
