@@ -493,15 +493,16 @@
 {:else}
   <main onmouseenter={resetMouseTimeout} onmousemove={resetMouseTimeout}>
     <header class:inactive={!mouseActive}>
-      <h1>ViewMaster</h1>
+      <h1 class="header-title">ViewMaster</h1>
       <div class="header-center">
         <div class="playback-controls">
           <button 
             class="prev-btn" 
             onclick={goToPreviousImage}
             disabled={historyIndex <= 0}
+            aria-label="Previous"
           >
-            Prev
+            <span style="display: flex; align-items: center; justify-content: center; height: 100%">&laquo;</span>
           </button>
           <button 
             class="play-pause-btn" 
@@ -546,8 +547,9 @@
             class="next-btn" 
             onclick={goToNextImage}
             disabled={!images || !images.images || images.images.length === 0}
+            aria-label="Next"
           >
-            Next
+            <span style="display: flex; align-items: center; justify-content: center; height: 100%">&raquo;</span>
           </button>
         </div>
       </div>
@@ -560,7 +562,7 @@
         >
           {isFullscreen ? '⤓' : '⤢'}
         </button>
-        <button class="logout-btn" onclick={handleLogout}>Logout</button>
+        <button class="logout-btn" onclick={handleLogout} aria-label="Logout">⎋</button>
       </div>
     </header>
     <div class="content">
