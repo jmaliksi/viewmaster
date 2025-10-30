@@ -273,7 +273,6 @@
   }
 
   function goToNextImage() {
-    resetMouseTimeout();
     hasStarted = true;
     // Auto-clear drawing when jumping to next image
     clearDrawingCanvas();
@@ -292,7 +291,6 @@
   }
 
   function goToPreviousImage() {
-    resetMouseTimeout();
     if (historyIndex > 0) {
       historyIndex--;
       currentImage = imageHistory[historyIndex];
@@ -307,7 +305,6 @@
   }
 
   function goToNextSequential() {
-    resetMouseTimeout();
     if (!images || !images.images || images.images.length === 0) {
       return;
     }
@@ -326,7 +323,6 @@
   }
 
   function goToPreviousSequential() {
-    resetMouseTimeout();
     if (!images || !images.images || images.images.length === 0) {
       return;
     }
