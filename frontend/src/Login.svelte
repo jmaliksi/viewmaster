@@ -70,6 +70,7 @@
         <label for="username">Username</label>
         <input
           id="username"
+          name="username"
           type="text"
           bind:value={username}
           onkeypress={handleKeyPress}
@@ -83,6 +84,7 @@
         <label for="password">Password</label>
         <input
           id="password"
+          name="password"
           type="password"
           bind:value={password}
           onkeypress={handleKeyPress}
