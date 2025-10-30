@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Login from './Login.svelte';
   import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
+  import { fabric } from 'fabric';
 
   const IMAGES_STORAGE_KEY = 'viewmaster_images';
   const MAX_HISTORY_SIZE = 50;
@@ -31,6 +32,62 @@
   let isEditingTimer = $state(false);
   let timerInputValue = $state('30');
   let isFullscreen = $state(false);
+
+  // Drawing mode state
+  const DRAW_COLOR = '#FF69B4';
+  const DRAW_WIDTH = 3;
+  let isDrawingMode = $state(false);
+  let fabricCanvas = null;
+  let drawingCanvasEl = null;
+
+  function initFabricIfNeeded() {
+    if (!drawingCanvasEl) return;
+    if (!fabricCanvas) {
+      fabricCanvas = new fabric.Canvas(drawingCanvasEl, {
+        isDrawingMode: true,
+        selection: false
+      });
+    }
+    fabricCanvas.isDrawingMode = true;
+    if (fabricCanvas.freeDrawingBrush) {
+      fabricCanvas.freeDrawingBrush.color = DRAW_COLOR;
+      fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
+    }
+    // Ensure canvas matches viewport
+    fabricCanvas.setWidth(window.innerWidth);
+    fabricCanvas.setHeight(window.innerHeight);
+    fabricCanvas.renderAll();
+  }
+
+  function enterDrawingMode() {
+    resetMouseTimeout();
+    isDrawingMode = true;
+    // Show overlay, then init and clear
+    queueMicrotask(() => {
+      initFabricIfNeeded();
+      clearDrawingCanvas();
+    });
+  }
+
+  function exitDrawingMode() {
+    isDrawingMode = false;
+    if (fabricCanvas) {
+      fabricCanvas.isDrawingMode = false;
+    }
+  }
+
+  function clearDrawingCanvas() {
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+      // Reapply brush after clear (clear removes background/objects but brush persists)
+      fabricCanvas.isDrawingMode = true;
+      if (fabricCanvas.freeDrawingBrush) {
+        fabricCanvas.freeDrawingBrush.color = DRAW_COLOR;
+        fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
+      }
+      fabricCanvas.renderAll();
+    }
+  }
 
   // Fullscreen functionality
   function toggleFullscreen() {
@@ -215,6 +272,8 @@
   function goToNextImage() {
     resetMouseTimeout();
     hasStarted = true;
+    // Auto-clear drawing when jumping to next image
+    clearDrawingCanvas();
     // If we're not at the end of history, go forward
     if (historyIndex < imageHistory.length - 1) {
       historyIndex++;
@@ -258,6 +317,8 @@
     }
     const nextIndex = (currentIndex + 1) % images.images.length;
     currentImage = images.images[nextIndex];
+    // Auto-clear drawing when moving to next sequential image
+    clearDrawingCanvas();
     preloadAdjacentImages();
   }
 
@@ -428,6 +489,12 @@
     if (isEditingTimer) return;
     
     switch (event.key) {
+      case 'Escape':
+        if (isDrawingMode) {
+          event.preventDefault();
+          exitDrawingMode();
+        }
+        break;
       case ' ':
         event.preventDefault();
         togglePlayPause();
@@ -614,4 +681,30 @@
       {/if}
     </div>
   </main>
+{/if}
+<!-- Drawing overlay covers entire viewport; only active during drawing mode -->
+<div class="drawing-overlay" class:active={isDrawingMode} onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}>
+  <canvas bind:this={drawingCanvasEl} id="drawing-canvas"></canvas>
+  <!-- no controls while drawing; exit with Escape -->
+  <!-- pointer events are enabled only when active via CSS -->
+</div>
+
+{#if authenticated && currentPath !== '/login' && !isDrawingMode}
+  <footer class:inactive={!mouseActive} class="bottom-bar">
+    <div class="bottom-actions">
+      <button 
+        class="draw-toggle-btn"
+        onclick={enterDrawingMode}
+        disabled={!images || !images.images || images.images.length === 0}
+        aria-label="Enter drawing mode"
+        title="Enter drawing mode (Esc to exit)"
+      >✎ Draw</button>
+      <button 
+        class="clear-draw-btn"
+        onclick={clearDrawingCanvas}
+        aria-label="Clear drawing"
+        disabled={!images || !images.images || images.images.length === 0}
+      >Clear</button>
+    </div>
+  </footer>
 {/if}

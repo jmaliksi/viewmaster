@@ -430,6 +430,89 @@ header:hover > * {
   cursor: not-allowed;
 }
 
+/* Bottom bar */
+footer.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background-color: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: white;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.5s ease-out;
+  opacity: 1;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+footer.bottom-bar.inactive {
+  opacity: 0;
+}
+
+footer.bottom-bar.inactive > * {
+  pointer-events: none;
+}
+
+footer.bottom-bar:hover {
+  opacity: 1 !important;
+}
+
+.bottom-actions {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.draw-toggle-btn,
+.clear-draw-btn {
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: var(--spacing-sm) 1.2em;
+  font-size: 0.9em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: transparent;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.25s, border-color 0.25s;
+}
+
+.draw-toggle-btn:hover:not(:disabled),
+.clear-draw-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.draw-toggle-btn:disabled,
+.clear-draw-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Drawing overlay */
+.drawing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  /* Keep transparent so image is visible behind */
+}
+
+.drawing-overlay canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+.drawing-overlay.active {
+  pointer-events: auto; /* Enable drawing interactions when active */
+}
+
 .login-container {
   width: 100%;
   max-width: 400px;
