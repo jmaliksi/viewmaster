@@ -22,7 +22,7 @@
   let hasStarted = $state(false);
   
   // Image preloading state
-  let nextRandomImage = $state(null);
+  let nextRandomImages = $state([]); // buffer of upcoming random images
   
   // Timer state
   let isPlaying = $state(false);
@@ -231,11 +231,10 @@
     }
 
     let newImage;
-    
-    // Use preloaded random image if available, otherwise pick a new one
-    if (nextRandomImage) {
-      newImage = nextRandomImage;
-      nextRandomImage = null; // Clear the used preloaded image
+
+    // Use preloaded random image from buffer if available, otherwise pick a new one
+    if (nextRandomImages && nextRandomImages.length > 0) {
+      newImage = nextRandomImages.shift();
     } else {
       const randomIndex = Math.floor(Math.random() * images.images.length);
       newImage = images.images[randomIndex];
@@ -256,19 +255,32 @@
     // Preload adjacent images after setting current image
     preloadAdjacentImages();
     
-    // Preload the next random image that will be picked
-    preloadNextRandomImage();
+    // Top up the next random images buffer
+    preloadNextRandomImages(2);
   }
 
-  function preloadNextRandomImage() {
+  function preloadNextRandomImages(count = 2) {
     if (!images || !images.images || images.images.length === 0) return;
-    
-    // Pick a random index for the next image and store it
-    const randomIndex = Math.floor(Math.random() * images.images.length);
-    nextRandomImage = images.images[randomIndex];
-    
-    // Preload the selected image
-    preloadImage(nextRandomImage.url);
+
+    if (!nextRandomImages) nextRandomImages = [];
+
+    const totalImages = images.images.length;
+    const currentUrl = currentImage?.url;
+
+    // Fill the buffer up to 'count' items
+    while (nextRandomImages.length < count) {
+      const randomIndex = Math.floor(Math.random() * totalImages);
+      const candidate = images.images[randomIndex];
+
+      // Avoid immediate duplicates with current or already buffered URLs
+      const alreadyBuffered = nextRandomImages.some(img => img.url === candidate.url);
+      if (candidate.url !== currentUrl && !alreadyBuffered) {
+        nextRandomImages.push(candidate);
+        preloadImage(candidate.url);
+      }
+      // If duplicate encountered, loop continues until filled (or best effort if all same)
+      if (totalImages <= 1) break;
+    }
   }
 
   function goToNextImage() {
@@ -453,14 +465,15 @@
     if (currentIndex === -1) return;
 
     const totalImages = images.images.length;
-    
-    // Preload next image
-    const nextIndex = (currentIndex + 1) % totalImages;
-    preloadImage(images.images[nextIndex].url);
-    
-    // Preload previous image
-    const prevIndex = (currentIndex - 1 + totalImages) % totalImages;
-    preloadImage(images.images[prevIndex].url);
+    const bufferSize = 2; // preload 2 before and 2 after
+
+    // Preload a symmetric buffer around the current index
+    for (let offset = 1; offset <= bufferSize; offset++) {
+      const nextIndex = (currentIndex + offset) % totalImages;
+      const prevIndex = (currentIndex - offset + totalImages) % totalImages;
+      preloadImage(images.images[nextIndex].url);
+      preloadImage(images.images[prevIndex].url);
+    }
   }
 
   function preloadBatch(count = 3) {
