@@ -39,6 +39,7 @@
   let isDrawingMode = $state(false);
   let fabricCanvas = null;
   let drawingCanvasEl = null;
+  let showUiDuringDraw = $state(false);
 
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
@@ -62,6 +63,7 @@
   function enterDrawingMode() {
     resetMouseTimeout();
     isDrawingMode = true;
+    showUiDuringDraw = false;
     // Show overlay, then init and clear
     queueMicrotask(() => {
       initFabricIfNeeded();
@@ -71,6 +73,7 @@
 
   function exitDrawingMode() {
     isDrawingMode = false;
+    showUiDuringDraw = false;
     if (fabricCanvas) {
       fabricCanvas.isDrawingMode = false;
     }
@@ -683,13 +686,33 @@
   </main>
 {/if}
 <!-- Drawing overlay covers entire viewport; only active during drawing mode -->
-<div class="drawing-overlay" class:active={isDrawingMode} onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}>
+<div class="drawing-overlay" class:active={isDrawingMode} onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
+  ontouchstart={(e) => {
+    if (!isDrawingMode) return;
+    // Two-finger tap shows bottom bar without exiting draw mode
+    if (e.touches && e.touches.length === 2) {
+      e.preventDefault();
+      showUiDuringDraw = true;
+      mouseActive = true;
+      resetMouseTimeout();
+    } else if (e.touches && e.touches.length === 1) {
+      // Resume drawing: hide UI again
+      showUiDuringDraw = false;
+    }
+  }}
+  onpointerdown={(e) => {
+    if (!isDrawingMode) return;
+    // Any pen press resumes drawing; hide UI
+    if (e.pointerType === 'pen' || e.pointerType === 'mouse' || e.pointerType === 'touch') {
+      showUiDuringDraw = false;
+    }
+  }}>
   <canvas bind:this={drawingCanvasEl} id="drawing-canvas"></canvas>
   <!-- no controls while drawing; exit with Escape -->
   <!-- pointer events are enabled only when active via CSS -->
 </div>
 
-{#if authenticated && currentPath !== '/login' && !isDrawingMode}
+{#if authenticated && currentPath !== '/login' && (!isDrawingMode || showUiDuringDraw)}
   <footer class:inactive={!mouseActive} class="bottom-bar">
     <div class="bottom-actions">
       <button 
