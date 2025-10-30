@@ -64,10 +64,9 @@
     resetMouseTimeout();
     isDrawingMode = true;
     showUiDuringDraw = false;
-    // Show overlay, then init and clear
+    // Show overlay, then init
     queueMicrotask(() => {
       initFabricIfNeeded();
-      clearDrawingCanvas();
     });
   }
 
@@ -682,15 +681,14 @@
   </main>
 {/if}
 <!-- Drawing overlay covers entire viewport; only active during drawing mode -->
-<div class="drawing-overlay" class:active={isDrawingMode} onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
+<div class="drawing-overlay" class:active={isDrawingMode} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
   ontouchstart={(e) => {
     if (!isDrawingMode) return;
-    // Two-finger tap shows bottom bar without exiting draw mode
+    // Two-finger tap exits draw mode (do not clear)
     if (e.touches && e.touches.length === 2) {
       e.preventDefault();
-      showUiDuringDraw = true;
-      mouseActive = true;
-      resetMouseTimeout();
+      exitDrawingMode();
+      showUiDuringDraw = false;
     } else if (e.touches && e.touches.length === 1) {
       // Resume drawing: hide UI again
       showUiDuringDraw = false;
