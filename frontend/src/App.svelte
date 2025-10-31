@@ -35,6 +35,12 @@
  
   // Computed: show timer warning in last 3 seconds
   let showTimerWarning = $derived(timeRemaining <= 3 && isPlaying);
+  
+  // Computed: timer progress (0 to 1)
+  let timerProgress = $derived(timerSeconds > 0 ? timeRemaining / timerSeconds : 0);
+  
+  // Computed: show timer bar when UI is hidden and timer is playing
+  let showTimerBar = $derived(!mouseActive && isPlaying && currentImage !== null);
 
   // Drawing mode state
   const DRAW_COLOR = '#FF69B4';
@@ -666,6 +672,9 @@
         </div>
       {:else if currentImage}
         <div class="image-container">
+          {#if showTimerBar}
+            <div class="timer-bar" style="width: {timerProgress * 100}%"></div>
+          {/if}
           <button 
             class="arrow-btn left-arrow" 
             class:inactive={!mouseActive}
