@@ -32,6 +32,9 @@
   let isEditingTimer = $state(false);
   let timerInputValue = $state('30');
   let isFullscreen = $state(false);
+ 
+  // Computed: show timer warning in last 3 seconds
+  let showTimerWarning = $derived(timeRemaining <= 3 && isPlaying);
 
   // Drawing mode state
   const DRAW_COLOR = '#FF69B4';
@@ -76,6 +79,8 @@
     if (fabricCanvas) {
       fabricCanvas.isDrawingMode = false;
     }
+    // Reset mouse timeout to show top and bottom bars
+    resetMouseTimeout();
   }
 
   function clearDrawingCanvas() {
@@ -590,7 +595,7 @@
           >
             {isPlaying ? '⏸' : '▶'}
           </button>
-          <div class="timer-container">
+          <div class="timer-container" class:show-warning={showTimerWarning}>
             {#if isEditingTimer && !isPlaying}
               <input
                 type="number"
