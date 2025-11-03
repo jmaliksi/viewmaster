@@ -24,6 +24,11 @@
   // Image preloading state
   let nextRandomImages = $state([]); // buffer of upcoming random images
   
+  // Folder filtering state
+  let availableFolders = $state([]);
+  let checkedFolders = $state(new Set());
+  let folderDropdownOpen = $state(false);
+  
   // Timer state
   let isPlaying = $state(false);
   let timerSeconds = $state(30); // Default 30 seconds
@@ -41,6 +46,23 @@
   
   // Computed: show timer bar when UI is hidden and timer is playing
   let showTimerBar = $derived(!mouseActive && isPlaying && currentImage !== null);
+  
+  // Computed: filtered images based on checked folders (always includes root images)
+  let filteredImages = $derived.by(() => {
+    if (!images || !images.images || images.images.length === 0) return [];
+    
+    return images.images.filter(img => {
+      // Always include root images (no parent folder)
+      const pathParts = (img.path || img.relative_path || '').split('/');
+      if (pathParts.length <= 1) {
+        return true; // Root image, always include
+      }
+      
+      // Get immediate parent folder
+      const parentFolder = pathParts[pathParts.length - 2];
+      return checkedFolders.has(parentFolder);
+    });
+  });
 
   // Drawing mode state
   const DRAW_COLOR = '#FF69B4';
@@ -192,6 +214,8 @@
       try {
         const parsed = JSON.parse(stored);
         images = parsed;
+        // Extract parent folders and initialize checked folders
+        extractFolders();
         return;
       } catch (e) {
         console.error('Error parsing stored images:', e);
@@ -217,6 +241,9 @@
       // Store in localStorage
       localStorage.setItem(IMAGES_STORAGE_KEY, JSON.stringify(data));
       images = data;
+      
+      // Extract parent folders and initialize checked folders
+      extractFolders();
     } catch (err) {
       console.error('Error loading images:', err);
       imageError = err.message || 'Failed to load images';
@@ -225,6 +252,54 @@
     }
   }
 
+  function extractFolders() {
+    if (!images || !images.images || images.images.length === 0) {
+      availableFolders = [];
+      checkedFolders = new Set();
+      return;
+    }
+    
+    const folders = new Set();
+    
+    images.images.forEach(img => {
+      const pathParts = (img.path || img.relative_path || '').split('/');
+      // If path has more than 1 part, it has a parent folder
+      if (pathParts.length > 1) {
+        const parentFolder = pathParts[pathParts.length - 2];
+        folders.add(parentFolder);
+      }
+    });
+    
+    availableFolders = Array.from(folders).sort();
+    
+    // Initialize all folders as checked
+    checkedFolders = new Set(availableFolders);
+  }
+  
+  function toggleFolder(folder) {
+    const newChecked = new Set(checkedFolders);
+    if (newChecked.has(folder)) {
+      newChecked.delete(folder);
+    } else {
+      newChecked.add(folder);
+    }
+    checkedFolders = newChecked;
+    // Clear preloaded random images buffer when folder selection changes
+    nextRandomImages = [];
+  }
+  
+  function toggleAllFolders() {
+    if (checkedFolders.size === availableFolders.length) {
+      // Uncheck all
+      checkedFolders = new Set();
+    } else {
+      // Check all
+      checkedFolders = new Set(availableFolders);
+    }
+    // Clear preloaded random images buffer when folder selection changes
+    nextRandomImages = [];
+  }
+  
   function startSession() {
     hasStarted = true;
     pickRandomImage();
@@ -236,7 +311,8 @@
   }
 
   function pickRandomImage() {
-    if (!images || !images.images || images.images.length === 0) {
+    const filtered = filteredImages;
+    if (!filtered || filtered.length === 0) {
       currentImage = null;
       return;
     }
@@ -247,8 +323,8 @@
     if (nextRandomImages && nextRandomImages.length > 0) {
       newImage = nextRandomImages.shift();
     } else {
-      const randomIndex = Math.floor(Math.random() * images.images.length);
-      newImage = images.images[randomIndex];
+      const randomIndex = Math.floor(Math.random() * filtered.length);
+      newImage = filtered[randomIndex];
     }
     
     // Add new image to history
@@ -271,17 +347,18 @@
   }
 
   function preloadNextRandomImages(count = 2) {
-    if (!images || !images.images || images.images.length === 0) return;
+    const filtered = filteredImages;
+    if (!filtered || filtered.length === 0) return;
 
     if (!nextRandomImages) nextRandomImages = [];
 
-    const totalImages = images.images.length;
+    const totalImages = filtered.length;
     const currentUrl = currentImage?.url;
 
     // Fill the buffer up to 'count' items
     while (nextRandomImages.length < count) {
       const randomIndex = Math.floor(Math.random() * totalImages);
-      const candidate = images.images[randomIndex];
+      const candidate = filtered[randomIndex];
 
       // Avoid immediate duplicates with current or already buffered URLs
       const alreadyBuffered = nextRandomImages.some(img => img.url === candidate.url);
@@ -666,9 +743,46 @@
         </div>
       {:else if !hasStarted && images && images.images && images.images.length > 0}
         <div class="start-container">
-          <button class="start-btn" onclick={startSession}>
-            Start
-          </button>
+          <div class="start-content">
+            <button class="start-btn" onclick={startSession}>
+              Start
+            </button>
+            {#if availableFolders.length > 0}
+              <div class="folder-filter">
+                <button 
+                  class="folder-filter-toggle"
+                  onclick={() => folderDropdownOpen = !folderDropdownOpen}
+                  aria-label="Toggle folder filter"
+                  aria-expanded={folderDropdownOpen}
+                >
+                  <span>Filter Folders</span>
+                  <span class="folder-filter-icon">{folderDropdownOpen ? '▼' : '▶'}</span>
+                </button>
+                {#if folderDropdownOpen}
+                  <div class="folder-checkboxes">
+                    <label class="folder-checkbox-item folder-checkbox-select-all">
+                      <input
+                        type="checkbox"
+                        checked={checkedFolders.size === availableFolders.length}
+                        onchange={toggleAllFolders}
+                      />
+                      <span>Select All</span>
+                    </label>
+                    {#each availableFolders as folder}
+                      <label class="folder-checkbox-item">
+                        <input
+                          type="checkbox"
+                          checked={checkedFolders.has(folder)}
+                          onchange={() => toggleFolder(folder)}
+                        />
+                        <span>{folder}</span>
+                      </label>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
       {:else if currentImage}
         <div class="image-container">
