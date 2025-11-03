@@ -5,6 +5,7 @@
   import { fabric } from 'fabric';
 
   const IMAGES_STORAGE_KEY = 'viewmaster_images';
+  const CHECKED_FOLDERS_STORAGE_KEY = 'viewmaster_checked_folders';
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
@@ -272,10 +273,35 @@
     
     availableFolders = Array.from(folders).sort();
     
-    // Initialize all folders as checked
+    // Try to load saved checked folders from localStorage
+    const stored = localStorage.getItem(CHECKED_FOLDERS_STORAGE_KEY);
+    if (stored) {
+      try {
+        const savedFolders = JSON.parse(stored);
+        // Only restore folders that still exist
+        const validSavedFolders = savedFolders.filter(f => folders.has(f));
+        if (validSavedFolders.length > 0) {
+          checkedFolders = new Set(validSavedFolders);
+          return;
+        }
+      } catch (e) {
+        console.error('Error parsing stored checked folders:', e);
+      }
+    }
+    
+    // Initialize all folders as checked if no saved preferences
     checkedFolders = new Set(availableFolders);
   }
   
+  function saveCheckedFolders() {
+    try {
+      const foldersArray = Array.from(checkedFolders);
+      localStorage.setItem(CHECKED_FOLDERS_STORAGE_KEY, JSON.stringify(foldersArray));
+    } catch (e) {
+      console.error('Error saving checked folders:', e);
+    }
+  }
+
   function toggleFolder(folder) {
     const newChecked = new Set(checkedFolders);
     if (newChecked.has(folder)) {
@@ -284,6 +310,7 @@
       newChecked.add(folder);
     }
     checkedFolders = newChecked;
+    saveCheckedFolders();
     // Clear preloaded random images buffer when folder selection changes
     nextRandomImages = [];
   }
@@ -296,6 +323,7 @@
       // Check all
       checkedFolders = new Set(availableFolders);
     }
+    saveCheckedFolders();
     // Clear preloaded random images buffer when folder selection changes
     nextRandomImages = [];
   }
@@ -451,6 +479,7 @@
     // Clear auth cache and images
     clearAuthCache();
     localStorage.removeItem(IMAGES_STORAGE_KEY);
+    localStorage.removeItem(CHECKED_FOLDERS_STORAGE_KEY);
     authenticated = false;
     images = null;
     currentImage = null;
