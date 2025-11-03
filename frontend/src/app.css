@@ -428,10 +428,46 @@ header:hover > * {
 }
 
 .folder-checkbox-item input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
   cursor: pointer;
-  accent-color: rgba(255, 255, 255, 0.8);
+  accent-color: rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.3);
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.folder-checkbox-item input[type="checkbox"]:checked {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.folder-checkbox-item input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(26, 26, 26, 0.95);
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.folder-checkbox-item input[type="checkbox"]:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.folder-checkbox-item input[type="checkbox"]:checked:hover {
+  background-color: rgba(255, 255, 255, 1);
+  border-color: rgba(255, 255, 255, 1);
 }
 
 .folder-checkbox-select-all {
