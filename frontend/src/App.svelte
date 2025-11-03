@@ -9,18 +9,16 @@
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
-  let authenticated = $state(false);
+  // Main app mode state machine
+  let appMode = $state('loading'); // 'login' | 'loading' | 'start' | 'viewing' | 'drawing' | 'error'
+  
   let currentPath = $state('/');
-  let checkingAuth = $state(true);
   let images = $state(null);
   let currentImage = $state(null);
-  let loadingImages = $state(false);
   let imageError = $state(null);
   let imageHistory = $state([]);
   let historyIndex = $state(-1);
-  let mouseActive = $state(true);
   let mouseTimeout = null;
-  let hasStarted = $state(false);
   
   // Image preloading state
   let nextRandomImages = $state([]); // buffer of upcoming random images
@@ -30,23 +28,31 @@
   let checkedFolders = $state(new Set());
   let folderDropdownOpen = $state(false);
   
-  // Timer state
-  let isPlaying = $state(false);
-  let timerSeconds = $state(30); // Default 30 seconds
-  let timeRemaining = $state(30);
+  // Consolidated timer state
+  let timer = $state({
+    playing: false,
+    duration: 30, // seconds
+    remaining: 30,
+    editing: false,
+    inputValue: '30'
+  });
   let timerInterval = null;
-  let isEditingTimer = $state(false);
-  let timerInputValue = $state('30');
   let isFullscreen = $state(false);
+  
+  // Consolidated UI visibility state
+  let uiVisibility = $state({
+    mouseActive: true,
+    showDuringDraw: false
+  });
  
   // Computed: show timer warning in last 3 seconds
-  let showTimerWarning = $derived(timeRemaining <= 3 && isPlaying);
+  let showTimerWarning = $derived(timer.remaining <= 3 && timer.playing);
   
   // Computed: timer progress (0 to 1)
-  let timerProgress = $derived(timerSeconds > 0 ? timeRemaining / timerSeconds : 0);
+  let timerProgress = $derived(timer.duration > 0 ? timer.remaining / timer.duration : 0);
   
-  // Computed: show timer bar when UI is hidden and timer is playing
-  let showTimerBar = $derived(!mouseActive && isPlaying && currentImage !== null);
+  // Computed: show timer bar when UI is hidden and timer is playing (or always in drawing mode)
+  let showTimerBar = $derived(timer.playing && currentImage !== null && (!uiVisibility.mouseActive || appMode === 'drawing'));
   
   // Computed: filtered images based on checked folders (always includes root images)
   let filteredImages = $derived.by(() => {
@@ -68,10 +74,8 @@
   // Drawing mode state
   const DRAW_COLOR = '#FF69B4';
   const DRAW_WIDTH = 3;
-  let isDrawingMode = $state(false);
   let fabricCanvas = null;
   let drawingCanvasEl = null;
-  let showUiDuringDraw = $state(false);
 
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
@@ -94,8 +98,8 @@
 
   function enterDrawingMode() {
     resetMouseTimeout();
-    isDrawingMode = true;
-    showUiDuringDraw = false;
+    appMode = 'drawing';
+    uiVisibility.showDuringDraw = false;
     // Show overlay, then init
     queueMicrotask(() => {
       initFabricIfNeeded();
@@ -103,8 +107,8 @@
   }
 
   function exitDrawingMode() {
-    isDrawingMode = false;
-    showUiDuringDraw = false;
+    appMode = 'viewing';
+    uiVisibility.showDuringDraw = false;
     if (fabricCanvas) {
       fabricCanvas.isDrawingMode = false;
     }
@@ -177,14 +181,14 @@
     currentPath = window.location.pathname;
     
     // Check authentication status
+    appMode = 'loading';
     const authStatus = await isAuthenticated();
     
     // If not authenticated and not on login page, redirect to login
     if (!authStatus && currentPath !== '/login') {
       window.history.pushState({}, '', '/login');
       currentPath = '/login';
-      authenticated = false;
-      checkingAuth = false;
+      appMode = 'login';
       return;
     }
 
@@ -192,23 +196,21 @@
     if (authStatus && currentPath === '/login') {
       window.history.pushState({}, '', '/');
       currentPath = '/';
-      authenticated = true;
-      checkingAuth = false;
       // Load images after authentication
       await loadImages();
       return;
     }
-
-    authenticated = authStatus;
-    checkingAuth = false;
     
     // If authenticated and not on login page, load images
-    if (authenticated && currentPath !== '/login') {
+    if (authStatus && currentPath !== '/login') {
       await loadImages();
+    } else {
+      appMode = 'login';
     }
   }
 
   async function loadImages() {
+    appMode = 'loading';
     // Check localStorage first
     const stored = localStorage.getItem(IMAGES_STORAGE_KEY);
     if (stored) {
@@ -217,6 +219,7 @@
         images = parsed;
         // Extract parent folders and initialize checked folders
         extractFolders();
+        appMode = 'start';
         return;
       } catch (e) {
         console.error('Error parsing stored images:', e);
@@ -225,7 +228,6 @@
     }
 
     // Fetch from API
-    loadingImages = true;
     imageError = null;
 
     try {
@@ -245,11 +247,11 @@
       
       // Extract parent folders and initialize checked folders
       extractFolders();
+      appMode = 'start';
     } catch (err) {
       console.error('Error loading images:', err);
       imageError = err.message || 'Failed to load images';
-    } finally {
-      loadingImages = false;
+      appMode = 'error';
     }
   }
 
@@ -348,12 +350,13 @@
   }
   
   function startSession() {
-    hasStarted = true;
+    appMode = 'viewing';
     pickRandomImage();
     // Preload a batch of images for smoother navigation
     preloadBatch(5);
     // Start the timer
-    isPlaying = true;
+    timer.playing = true;
+    timer.remaining = timer.duration;
     startTimer();
   }
 
@@ -419,7 +422,9 @@
   }
 
   function goToNextImage() {
-    hasStarted = true;
+    if (appMode === 'start') {
+      appMode = 'viewing';
+    }
     // Auto-clear drawing when jumping to next image
     clearDrawingCanvas();
     // If we're not at the end of history, go forward
@@ -431,8 +436,8 @@
       pickRandomImage();
     }
     // Reset timer when image changes if playing
-    if (isPlaying) {
-      timeRemaining = timerSeconds;
+    if (timer.playing) {
+      timer.remaining = timer.duration;
     }
   }
 
@@ -499,12 +504,11 @@
     clearAuthCache();
     localStorage.removeItem(IMAGES_STORAGE_KEY);
     localStorage.removeItem(CHECKED_FOLDERS_STORAGE_KEY);
-    authenticated = false;
     images = null;
     currentImage = null;
     imageHistory = [];
     historyIndex = -1;
-    hasStarted = false;
+    appMode = 'login';
     
     // Redirect to login
     window.history.pushState({}, '', '/login');
@@ -512,12 +516,12 @@
   }
 
   function resetMouseTimeout() {
-    mouseActive = true;
+    uiVisibility.mouseActive = true;
     if (mouseTimeout) {
       clearTimeout(mouseTimeout);
     }
     mouseTimeout = setTimeout(() => {
-      mouseActive = false;
+      uiVisibility.mouseActive = false;
     }, MOUSE_INACTIVITY_TIMEOUT);
   }
 
@@ -526,8 +530,8 @@
       clearInterval(timerInterval);
     }
     timerInterval = setInterval(() => {
-      if (timeRemaining > 0) {
-        timeRemaining--;
+      if (timer.remaining > 0) {
+        timer.remaining--;
       } else {
         // Timer expired - go to next image (which will reset timer)
         goToNextImage();
@@ -543,8 +547,8 @@
   }
 
   function togglePlayPause() {
-    isPlaying = !isPlaying;
-    if (isPlaying) {
+    timer.playing = !timer.playing;
+    if (timer.playing) {
       startTimer();
     } else {
       stopTimer();
@@ -553,32 +557,32 @@
 
   function handleTimerInputChange(e) {
     const value = e.target.value;
-    timerInputValue = value;
+    timer.inputValue = value;
     const numValue = parseInt(value, 10);
     if (!isNaN(numValue) && numValue > 0) {
-      timerSeconds = numValue;
-      if (!isPlaying) {
-        timeRemaining = numValue;
+      timer.duration = numValue;
+      if (!timer.playing) {
+        timer.remaining = numValue;
       }
     }
   }
 
   function handleTimerInputBlur() {
-    isEditingTimer = false;
-    const numValue = parseInt(timerInputValue, 10);
+    timer.editing = false;
+    const numValue = parseInt(timer.inputValue, 10);
     if (isNaN(numValue) || numValue <= 0) {
       // Reset to previous valid value
-      timerInputValue = timerSeconds.toString();
-      timeRemaining = timerSeconds;
+      timer.inputValue = timer.duration.toString();
+      timer.remaining = timer.duration;
     } else {
-      timerSeconds = numValue;
-      timeRemaining = numValue;
+      timer.duration = numValue;
+      timer.remaining = numValue;
     }
   }
 
   function handleTimerInputFocus() {
-    if (!isPlaying) {
-      isEditingTimer = true;
+    if (!timer.playing) {
+      timer.editing = true;
     }
   }
 
@@ -629,15 +633,15 @@
 
   // Keyboard controls
   function handleKeydown(event) {
-    // Only handle keyboard shortcuts when authenticated and not on login page
-    if (!authenticated || currentPath === '/login') return;
+    // Only handle keyboard shortcuts when not on login page
+    if (appMode === 'login' || currentPath === '/login') return;
     
     // Don't handle keyboard shortcuts when editing timer
-    if (isEditingTimer) return;
+    if (timer.editing) return;
     
     switch (event.key) {
       case 'Escape':
-        if (isDrawingMode) {
+        if (appMode === 'drawing') {
           event.preventDefault();
           exitDrawingMode();
         }
@@ -702,11 +706,11 @@
   });
 </script>
 
-{#if !authenticated || currentPath === '/login'}
+{#if appMode === 'login' || currentPath === '/login'}
   <Login />
 {:else}
   <main onmouseenter={resetMouseTimeout} onmousemove={resetMouseTimeout}>
-    <header class:inactive={!mouseActive}>
+    <header class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}>
       <h1 class="header-title">ViewMaster</h1>
       <div class="header-center">
         <div class="playback-controls">
@@ -722,16 +726,16 @@
             class="play-pause-btn" 
             onclick={togglePlayPause}
             disabled={!images || !images.images || images.images.length === 0}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            aria-label={timer.playing ? 'Pause' : 'Play'}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {timer.playing ? '⏸' : '▶'}
           </button>
           <div class="timer-container" class:show-warning={showTimerWarning}>
-            {#if isEditingTimer && !isPlaying}
+            {#if timer.editing && !timer.playing}
               <input
                 type="number"
                 class="timer-input"
-                value={timerInputValue}
+                value={timer.inputValue}
                 min="1"
                 max="600"
                 oninput={handleTimerInputChange}
@@ -740,7 +744,7 @@
                   if (e.key === 'Enter') {
                     e.target.blur();
                   } else if (e.key === 'Escape') {
-                    timerInputValue = timerSeconds.toString();
+                    timer.inputValue = timer.duration.toString();
                     e.target.blur();
                   }
                 }}
@@ -750,10 +754,10 @@
               <button
                 class="timer-display"
                 onclick={handleTimerInputFocus}
-                disabled={isPlaying}
+                disabled={timer.playing}
                 aria-label="Edit timer duration"
               >
-                {formatTime(timeRemaining)}
+                {formatTime(timer.remaining)}
               </button>
             {/if}
           </div>
@@ -780,16 +784,14 @@
       </div>
     </header>
     <div class="content">
-      {#if checkingAuth}
-        <p>Checking authentication...</p>
-      {:else if loadingImages}
-        <p>Loading images...</p>
-      {:else if imageError}
+      {#if appMode === 'loading'}
+        <p>{currentPath === '/login' ? 'Checking authentication...' : 'Loading images...'}</p>
+      {:else if appMode === 'error'}
         <div class="error-message">
           <p>Error: {imageError}</p>
           <button onclick={loadImages}>Retry</button>
         </div>
-      {:else if !hasStarted && images && images.images && images.images.length > 0}
+      {:else if appMode === 'start'}
         <div class="start-container">
           <div class="start-content">
             <button class="start-btn" onclick={startSession}>
@@ -841,14 +843,14 @@
             {/if}
           </div>
         </div>
-      {:else if currentImage}
+      {:else if (appMode === 'viewing' || appMode === 'drawing') && currentImage}
         <div class="image-container">
           {#if showTimerBar}
             <div class="timer-bar" style="width: {timerProgress * 100}%"></div>
           {/if}
           <button 
             class="arrow-btn left-arrow" 
-            class:inactive={!mouseActive}
+            class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToPreviousSequential}
             disabled={!images || !images.images || images.images.length === 0}
             aria-label="Previous image"
@@ -862,7 +864,7 @@
           />
           <button 
             class="arrow-btn right-arrow" 
-            class:inactive={!mouseActive}
+            class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToNextSequential}
             disabled={!images || !images.images || images.images.length === 0}
             aria-label="Next image"
@@ -879,24 +881,24 @@
   </main>
 {/if}
 <!-- Drawing overlay covers entire viewport; only active during drawing mode -->
-<div class="drawing-overlay" class:active={isDrawingMode} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
+<div class="drawing-overlay" class:active={appMode === 'drawing'} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
   ontouchstart={(e) => {
-    if (!isDrawingMode) return;
+    if (appMode !== 'drawing') return;
     // Two-finger tap exits draw mode (do not clear)
     if (e.touches && e.touches.length === 2) {
       e.preventDefault();
       exitDrawingMode();
-      showUiDuringDraw = false;
+      uiVisibility.showDuringDraw = false;
     } else if (e.touches && e.touches.length === 1) {
       // Resume drawing: hide UI again
-      showUiDuringDraw = false;
+      uiVisibility.showDuringDraw = false;
     }
   }}
   onpointerdown={(e) => {
-    if (!isDrawingMode) return;
+    if (appMode !== 'drawing') return;
     // Any pen press resumes drawing; hide UI
     if (e.pointerType === 'pen' || e.pointerType === 'mouse' || e.pointerType === 'touch') {
-      showUiDuringDraw = false;
+      uiVisibility.showDuringDraw = false;
     }
   }}>
   <canvas bind:this={drawingCanvasEl} id="drawing-canvas"></canvas>
@@ -904,8 +906,8 @@
   <!-- pointer events are enabled only when active via CSS -->
 </div>
 
-{#if authenticated && currentPath !== '/login' && (!isDrawingMode || showUiDuringDraw)}
-  <footer class:inactive={!mouseActive} class="bottom-bar">
+{#if appMode !== 'login' && currentPath !== '/login' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
+  <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions">
       <button 
         class="draw-toggle-btn"
