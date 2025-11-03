@@ -423,6 +423,14 @@ header:hover > * {
   user-select: none;
 }
 
+.folder-thumbnail {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 .folder-checkbox-item:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }

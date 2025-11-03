@@ -328,6 +328,25 @@
     nextRandomImages = [];
   }
   
+  function getFirstImageForFolder(folder) {
+    if (!images || !images.images || images.images.length === 0) {
+      return null;
+    }
+    
+    // Find the first image that belongs to this folder
+    for (const img of images.images) {
+      const pathParts = (img.path || img.relative_path || '').split('/');
+      if (pathParts.length > 1) {
+        const parentFolder = pathParts[pathParts.length - 2];
+        if (parentFolder === folder) {
+          return img.url;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
   function startSession() {
     hasStarted = true;
     pickRandomImage();
@@ -798,7 +817,16 @@
                       <span>Select All</span>
                     </label>
                     {#each availableFolders as folder}
+                      {@const thumbnailUrl = getFirstImageForFolder(folder)}
                       <label class="folder-checkbox-item">
+                        {#if thumbnailUrl}
+                          <img 
+                            src={thumbnailUrl} 
+                            alt=""
+                            class="folder-thumbnail"
+                            loading="lazy"
+                          />
+                        {/if}
                         <input
                           type="checkbox"
                           checked={checkedFolders.has(folder)}
