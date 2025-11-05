@@ -5,6 +5,7 @@
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "uvicorn main:app --reload",
+    "dev": "cd frontend && npm run build && cd .. && fastapi dev main.py",
     "build": "cd frontend && npm run build",
     "install:frontend": "cd frontend && npm install"
   },

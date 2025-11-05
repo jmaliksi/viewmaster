@@ -10,7 +10,7 @@
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
   // Main app mode state machine
-  let appMode = $state('loading'); // 'login' | 'loading' | 'start' | 'viewing' | 'drawing' | 'error'
+  let appMode = $state('loading'); // 'login' | 'loading' | 'start' | 'viewing' | 'drawing' | 'stopped' | 'error'
   
   let currentPath = $state('/');
   let images = $state(null);
@@ -515,6 +515,32 @@
     currentPath = '/login';
   }
 
+  function stopSession() {
+    appMode = 'stopped';
+    // Stop the timer
+    timer.playing = false;
+    stopTimer();
+  }
+
+  function resumeSession() {
+    appMode = 'viewing';
+    // Resume the timer
+    timer.playing = true;
+    startTimer();
+  }
+
+  function newSession() {
+    appMode = 'start';
+    // Stop the timer
+    timer.playing = false;
+    stopTimer();
+    // Clear current image and history
+    currentImage = null;
+    imageHistory = [];
+    historyIndex = -1;
+    nextRandomImages = [];
+  }
+
   function resetMouseTimeout() {
     uiVisibility.mouseActive = true;
     if (mouseTimeout) {
@@ -780,7 +806,11 @@
         >
           {isFullscreen ? '⤓' : '⤢'}
         </button>
-        <button class="logout-btn" onclick={handleLogout} aria-label="Logout">⎋</button>
+        {#if appMode === 'viewing'}
+          <button class="stop-btn" onclick={stopSession} aria-label="Stop">⏹</button>
+        {:else}
+          <button class="logout-btn" onclick={handleLogout} aria-label="Logout">⎋</button>
+        {/if}
       </div>
     </header>
     <div class="content">
@@ -841,6 +871,19 @@
                 {/if}
               </div>
             {/if}
+          </div>
+        </div>
+      {:else if appMode === 'stopped'}
+        <div class="stopped-container">
+          <div class="stopped-content">
+            <div class="stopped-buttons">
+              <button class="resume-btn" onclick={resumeSession} aria-label="Resume">
+                Resume
+              </button>
+              <button class="new-session-btn" onclick={newSession} aria-label="New Session">
+                New Session
+              </button>
+            </div>
           </div>
         </div>
       {:else if (appMode === 'viewing' || appMode === 'drawing') && currentImage}
@@ -906,7 +949,7 @@
   <!-- pointer events are enabled only when active via CSS -->
 </div>
 
-{#if appMode !== 'login' && currentPath !== '/login' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
+{#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions">
       <button 

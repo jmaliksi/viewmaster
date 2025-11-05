@@ -154,7 +154,8 @@ header:hover > * {
 .prev-btn,
 .next-btn,
 .fullscreen-btn,
-.logout-btn {
+.logout-btn,
+.stop-btn {
   border-radius: var(--border-radius);
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: var(--spacing-sm) 1.2em;
@@ -167,7 +168,7 @@ header:hover > * {
   transition: background-color 0.25s, border-color 0.25s;
 }
 
-.prev-btn, .next-btn, .logout-btn {
+.prev-btn, .next-btn, .logout-btn, .stop-btn {
   font-size: 1.1em;
   padding: var(--spacing-sm) 0.9em;
   min-width: 2.5em;
@@ -269,7 +270,8 @@ header:hover > * {
 .prev-btn:hover:not(:disabled),
 .next-btn:hover:not(:disabled),
 .fullscreen-btn:hover,
-.logout-btn:hover {
+.logout-btn:hover,
+.stop-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.5);
 }
@@ -321,7 +323,8 @@ header:hover > * {
   padding: 0;
 }
 
-.start-container {
+.start-container,
+.stopped-container {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -329,7 +332,8 @@ header:hover > * {
   height: 100%;
 }
 
-.start-content {
+.start-content,
+.stopped-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -358,6 +362,40 @@ header:hover > * {
 }
 
 .start-btn:active {
+  transform: scale(0.98);
+}
+
+.stopped-buttons {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.resume-btn,
+.new-session-btn {
+  padding: 1.2em 3em;
+  font-size: 1.3em;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  transition: background-color 0.25s, border-color 0.25s, transform 0.1s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.resume-btn:hover,
+.new-session-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.05);
+}
+
+.resume-btn:active,
+.new-session-btn:active {
   transform: scale(0.98);
 }
 
