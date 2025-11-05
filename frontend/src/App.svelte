@@ -798,18 +798,27 @@
         </div>
       </div>
       <div class="header-actions">
-        <button 
-          class="fullscreen-btn" 
-          onclick={toggleFullscreen}
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-        >
-          {isFullscreen ? '⤓' : '⤢'}
-        </button>
-        {#if appMode === 'viewing'}
-          <button class="stop-btn" onclick={stopSession} aria-label="Stop">⏹</button>
+        {#if appMode === 'stopped'}
+          <button class="resume-btn" onclick={resumeSession} aria-label="Resume">
+            Resume
+          </button>
+          <button class="new-session-btn" onclick={newSession} aria-label="New Session">
+            New Session
+          </button>
         {:else}
-          <button class="logout-btn" onclick={handleLogout} aria-label="Logout">⎋</button>
+          <button 
+            class="fullscreen-btn" 
+            onclick={toggleFullscreen}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          >
+            {isFullscreen ? '⤓' : '⤢'}
+          </button>
+          {#if appMode === 'viewing'}
+            <button class="stop-btn" onclick={stopSession} aria-label="Stop">⏹</button>
+          {:else}
+            <button class="logout-btn" onclick={handleLogout} aria-label="Logout">⎋</button>
+          {/if}
         {/if}
       </div>
     </header>
@@ -874,16 +883,18 @@
           </div>
         </div>
       {:else if appMode === 'stopped'}
-        <div class="stopped-container">
-          <div class="stopped-content">
-            <div class="stopped-buttons">
-              <button class="resume-btn" onclick={resumeSession} aria-label="Resume">
-                Resume
-              </button>
-              <button class="new-session-btn" onclick={newSession} aria-label="New Session">
-                New Session
-              </button>
-            </div>
+        <div class="gallery-container">
+          <div class="gallery-grid">
+            {#each imageHistory as image}
+              <div class="gallery-item">
+                <img 
+                  src={image.url} 
+                  alt={image.filename}
+                  class="gallery-thumbnail"
+                  loading="lazy"
+                />
+              </div>
+            {/each}
           </div>
         </div>
       {:else if (appMode === 'viewing' || appMode === 'drawing') && currentImage}
