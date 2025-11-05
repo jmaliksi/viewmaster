@@ -80,6 +80,9 @@
   // Drawing storage: Map of image URL -> drawing snapshot (data URL)
   let imageDrawings = $state(new Map());
   let showDrawingsInGallery = $state(true);
+  
+  // Gallery size control (percentage of smaller viewport dimension)
+  let gallerySizePercent = $state(25); // Default 25%, min 15%
 
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
@@ -963,8 +966,10 @@
           </div>
         </div>
       {:else if appMode === 'stopped'}
+        {@const minDimension = Math.min(window.innerWidth, window.innerHeight)}
+        {@const galleryItemSize = (minDimension * gallerySizePercent) / 100}
         <div class="gallery-container">
-          <div class="gallery-grid">
+          <div class="gallery-grid" style="--gallery-item-size: {galleryItemSize}px;">
             {#each imageHistory as image}
               {@const hasDrawing = imageDrawings.has(image.url) && showDrawingsInGallery}
               <div class="gallery-item">
@@ -1069,6 +1074,19 @@
 {:else if appMode === 'stopped'}
   <footer class="bottom-bar">
     <div class="bottom-actions">
+      <label class="gallery-size-slider-label">
+        <span>Size:</span>
+        <input
+          type="range"
+          class="gallery-size-slider"
+          min="15"
+          max="100"
+          value={gallerySizePercent}
+          oninput={(e) => gallerySizePercent = parseInt(e.target.value, 10)}
+          aria-label="Gallery image size"
+        />
+        <span class="gallery-size-percent">{gallerySizePercent}%</span>
+      </label>
       <button 
         class="toggle-drawings-btn"
         onclick={() => showDrawingsInGallery = !showDrawingsInGallery}

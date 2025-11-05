@@ -352,7 +352,7 @@ header:hover > * {
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-item-size, 200px), 1fr));
   gap: var(--spacing-md);
   max-width: 1400px;
   margin: 0 auto;
@@ -379,10 +379,6 @@ header:hover > * {
   transition: transform 0.2s, opacity 0.2s;
 }
 
-.gallery-thumbnail:hover {
-  transform: scale(1.05);
-  opacity: 0.9;
-}
 
 .gallery-drawing-overlay {
   position: absolute;
@@ -683,6 +679,60 @@ footer.bottom-bar:hover {
   color: white;
   cursor: pointer;
   transition: background-color 0.25s, border-color 0.25s;
+}
+
+.gallery-size-slider-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: white;
+  font-size: 0.9em;
+}
+
+.gallery-size-slider {
+  width: 150px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.gallery-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.gallery-size-slider::-webkit-slider-thumb:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.gallery-size-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s;
+}
+
+.gallery-size-slider::-moz-range-thumb:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.gallery-size-percent {
+  min-width: 3em;
+  text-align: right;
+  font-weight: 500;
 }
 
 .draw-toggle-btn:hover:not(:disabled),
