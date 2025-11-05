@@ -76,6 +76,10 @@
   const DRAW_WIDTH = 3;
   let fabricCanvas = null;
   let drawingCanvasEl = null;
+  
+  // Drawing storage: Map of image URL -> drawing snapshot (data URL)
+  let imageDrawings = $state(new Map());
+  let showDrawingsInGallery = $state(true);
 
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
@@ -106,7 +110,39 @@
     });
   }
 
+  function saveCurrentDrawing() {
+    if (!fabricCanvas || !currentImage) return;
+    
+    // Check if canvas has any drawing objects
+    const objects = fabricCanvas.getObjects();
+    if (objects.length === 0) {
+      // No drawing, remove from storage if exists
+      imageDrawings.delete(currentImage.url);
+      return;
+    }
+    
+    // Save the canvas as a data URL
+    // The canvas is fullscreen, but we'll overlay it on thumbnails in gallery
+    // The browser will scale it appropriately when displayed
+    try {
+      const dataUrl = fabricCanvas.toDataURL('image/png');
+      imageDrawings.set(currentImage.url, dataUrl);
+    } catch (e) {
+      console.error('Error saving drawing:', e);
+      // If CORS error, try without crossOrigin
+      try {
+        const dataUrl = fabricCanvas.toDataURL('image/png');
+        imageDrawings.set(currentImage.url, dataUrl);
+      } catch (e2) {
+        console.error('Error saving drawing (retry):', e2);
+      }
+    }
+  }
+
   function exitDrawingMode() {
+    // Save drawing before exiting
+    saveCurrentDrawing();
+    
     appMode = 'viewing';
     uiVisibility.showDuringDraw = false;
     if (fabricCanvas) {
@@ -126,6 +162,10 @@
         fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
       }
       fabricCanvas.renderAll();
+    }
+    // Remove drawing from storage for current image
+    if (currentImage) {
+      imageDrawings.delete(currentImage.url);
     }
   }
 
@@ -425,8 +465,20 @@
     if (appMode === 'start') {
       appMode = 'viewing';
     }
-    // Auto-clear drawing when jumping to next image
-    clearDrawingCanvas();
+    // Save current drawing before moving to next image
+    if (fabricCanvas && currentImage) {
+      saveCurrentDrawing();
+    }
+    // Clear drawing canvas for next image
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+      if (fabricCanvas.isDrawingMode) {
+        if (fabricCanvas.freeDrawingBrush) {
+          fabricCanvas.freeDrawingBrush.color = DRAW_COLOR;
+          fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
+        }
+      }
+    }
     // If we're not at the end of history, go forward
     if (historyIndex < imageHistory.length - 1) {
       historyIndex++;
@@ -459,6 +511,10 @@
     if (!images || !images.images || images.images.length === 0) {
       return;
     }
+    // Save current drawing before moving to next image
+    if (fabricCanvas && currentImage) {
+      saveCurrentDrawing();
+    }
     const currentIndex = getCurrentImageIndex();
     if (currentIndex === -1) {
       // If current image not found, go to first image
@@ -468,8 +524,16 @@
     }
     const nextIndex = (currentIndex + 1) % images.images.length;
     currentImage = images.images[nextIndex];
-    // Auto-clear drawing when moving to next sequential image
-    clearDrawingCanvas();
+    // Clear drawing canvas for next image
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+      if (fabricCanvas.isDrawingMode) {
+        if (fabricCanvas.freeDrawingBrush) {
+          fabricCanvas.freeDrawingBrush.color = DRAW_COLOR;
+          fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
+        }
+      }
+    }
     preloadAdjacentImages();
   }
 
@@ -516,6 +580,22 @@
   }
 
   function stopSession() {
+    // Save current drawing before stopping
+    if (fabricCanvas && currentImage) {
+      saveCurrentDrawing();
+    }
+    
+    // Clear the drawing canvas
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+      if (fabricCanvas.isDrawingMode) {
+        if (fabricCanvas.freeDrawingBrush) {
+          fabricCanvas.freeDrawingBrush.color = DRAW_COLOR;
+          fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH;
+        }
+      }
+    }
+    
     appMode = 'stopped';
     // Stop the timer
     timer.playing = false;
@@ -886,6 +966,7 @@
         <div class="gallery-container">
           <div class="gallery-grid">
             {#each imageHistory as image}
+              {@const hasDrawing = imageDrawings.has(image.url) && showDrawingsInGallery}
               <div class="gallery-item">
                 <img 
                   src={image.url} 
@@ -893,6 +974,13 @@
                   class="gallery-thumbnail"
                   loading="lazy"
                 />
+                {#if hasDrawing}
+                  <img 
+                    src={imageDrawings.get(image.url)} 
+                    alt="Drawing overlay"
+                    class="gallery-drawing-overlay"
+                  />
+                {/if}
               </div>
             {/each}
           </div>
@@ -976,6 +1064,19 @@
         aria-label="Clear drawing"
         disabled={!images || !images.images || images.images.length === 0}
       >Clear</button>
+    </div>
+  </footer>
+{:else if appMode === 'stopped'}
+  <footer class="bottom-bar">
+    <div class="bottom-actions">
+      <button 
+        class="toggle-drawings-btn"
+        onclick={() => showDrawingsInGallery = !showDrawingsInGallery}
+        aria-label={showDrawingsInGallery ? 'Hide drawings' : 'Show drawings'}
+        title={showDrawingsInGallery ? 'Hide drawings' : 'Show drawings'}
+      >
+        {showDrawingsInGallery ? '👁️ Hide Drawings' : '👁️‍🗨️ Show Drawings'}
+      </button>
     </div>
   </footer>
 {/if}
