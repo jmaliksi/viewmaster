@@ -83,6 +83,9 @@
   
   // Gallery size control (percentage of smaller viewport dimension)
   let gallerySizePercent = $state(25); // Default 25%, min 15%
+  
+  // Image opacity control (0-100%)
+  let imageOpacity = $state(100); // Default 100% opacity
 
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
@@ -978,6 +981,7 @@
                   alt={image.filename}
                   class="gallery-thumbnail"
                   loading="lazy"
+                  style="opacity: {imageOpacity / 100};"
                 />
                 {#if hasDrawing}
                   <img 
@@ -1008,6 +1012,7 @@
             src={currentImage.url} 
             alt={currentImage.filename}
             class="display-image"
+            style="opacity: {imageOpacity / 100};"
           />
           <button 
             class="arrow-btn right-arrow" 
@@ -1056,6 +1061,19 @@
 {#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions">
+      <label class="opacity-slider-label">
+        <span>Opacity:</span>
+        <input
+          type="range"
+          class="opacity-slider"
+          min="0"
+          max="100"
+          value={imageOpacity}
+          oninput={(e) => imageOpacity = parseInt(e.target.value, 10)}
+          aria-label="Image opacity"
+        />
+        <span class="opacity-percent">{imageOpacity}%</span>
+      </label>
       <button 
         class="draw-toggle-btn"
         onclick={enterDrawingMode}
@@ -1074,6 +1092,19 @@
 {:else if appMode === 'stopped'}
   <footer class="bottom-bar">
     <div class="bottom-actions">
+      <label class="opacity-slider-label">
+        <span>Opacity:</span>
+        <input
+          type="range"
+          class="opacity-slider"
+          min="0"
+          max="100"
+          value={imageOpacity}
+          oninput={(e) => imageOpacity = parseInt(e.target.value, 10)}
+          aria-label="Image opacity"
+        />
+        <span class="opacity-percent">{imageOpacity}%</span>
+      </label>
       <label class="gallery-size-slider-label">
         <span>Size:</span>
         <input

@@ -379,7 +379,6 @@ header:hover > * {
   transition: transform 0.2s, opacity 0.2s;
 }
 
-
 .gallery-drawing-overlay {
   position: absolute;
   top: 0;
@@ -681,7 +680,8 @@ footer.bottom-bar:hover {
   transition: background-color 0.25s, border-color 0.25s;
 }
 
-.gallery-size-slider-label {
+.gallery-size-slider-label,
+.opacity-slider-label {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -689,7 +689,8 @@ footer.bottom-bar:hover {
   font-size: 0.9em;
 }
 
-.gallery-size-slider {
+.gallery-size-slider,
+.opacity-slider {
   width: 150px;
   height: 6px;
   border-radius: 3px;
@@ -700,7 +701,8 @@ footer.bottom-bar:hover {
   cursor: pointer;
 }
 
-.gallery-size-slider::-webkit-slider-thumb {
+.gallery-size-slider::-webkit-slider-thumb,
+.opacity-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
@@ -711,11 +713,13 @@ footer.bottom-bar:hover {
   transition: background-color 0.2s;
 }
 
-.gallery-size-slider::-webkit-slider-thumb:hover {
+.gallery-size-slider::-webkit-slider-thumb:hover,
+.opacity-slider::-webkit-slider-thumb:hover {
   background: rgba(255, 255, 255, 0.9);
 }
 
-.gallery-size-slider::-moz-range-thumb {
+.gallery-size-slider::-moz-range-thumb,
+.opacity-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -725,11 +729,13 @@ footer.bottom-bar:hover {
   transition: background-color 0.2s;
 }
 
-.gallery-size-slider::-moz-range-thumb:hover {
+.gallery-size-slider::-moz-range-thumb:hover,
+.opacity-slider::-moz-range-thumb:hover {
   background: rgba(255, 255, 255, 0.9);
 }
 
-.gallery-size-percent {
+.gallery-size-percent,
+.opacity-percent {
   min-width: 3em;
   text-align: right;
   font-weight: 500;
