@@ -257,23 +257,7 @@
 
   async function loadImages() {
     appMode = 'loading';
-    // Check localStorage first
-    const stored = localStorage.getItem(IMAGES_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        images = parsed;
-        // Extract parent folders and initialize checked folders
-        extractFolders();
-        appMode = 'start';
-        return;
-      } catch (e) {
-        console.error('Error parsing stored images:', e);
-        localStorage.removeItem(IMAGES_STORAGE_KEY);
-      }
-    }
-
-    // Fetch from API
+    // Always fetch from API (no localStorage caching)
     imageError = null;
 
     try {
@@ -287,8 +271,7 @@
 
       const data = await response.json();
       
-      // Store in localStorage
-      localStorage.setItem(IMAGES_STORAGE_KEY, JSON.stringify(data));
+      // Keep in memory only
       images = data;
       
       // Extract parent folders and initialize checked folders
@@ -321,35 +304,10 @@
     
     availableFolders = Array.from(folders).sort();
     
-    // Try to load saved checked folders from localStorage
-    const stored = localStorage.getItem(CHECKED_FOLDERS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const savedFolders = JSON.parse(stored);
-        // Only restore folders that still exist
-        const validSavedFolders = savedFolders.filter(f => folders.has(f));
-        if (validSavedFolders.length > 0) {
-          checkedFolders = new Set(validSavedFolders);
-          return;
-        }
-      } catch (e) {
-        console.error('Error parsing stored checked folders:', e);
-      }
-    }
-    
-    // Initialize all folders as checked if no saved preferences
+    // Always initialize all folders as checked (no localStorage persistence)
     checkedFolders = new Set(availableFolders);
   }
   
-  function saveCheckedFolders() {
-    try {
-      const foldersArray = Array.from(checkedFolders);
-      localStorage.setItem(CHECKED_FOLDERS_STORAGE_KEY, JSON.stringify(foldersArray));
-    } catch (e) {
-      console.error('Error saving checked folders:', e);
-    }
-  }
-
   function toggleFolder(folder) {
     const newChecked = new Set(checkedFolders);
     if (newChecked.has(folder)) {
@@ -358,7 +316,6 @@
       newChecked.add(folder);
     }
     checkedFolders = newChecked;
-    saveCheckedFolders();
     // Clear preloaded random images buffer when folder selection changes
     nextRandomImages = [];
   }
@@ -371,7 +328,6 @@
       // Check all
       checkedFolders = new Set(availableFolders);
     }
-    saveCheckedFolders();
     // Clear preloaded random images buffer when folder selection changes
     nextRandomImages = [];
   }
