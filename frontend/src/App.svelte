@@ -73,7 +73,7 @@
 
   // Drawing mode state
   const DRAW_COLOR = '#FF69B4';
-  const DRAW_WIDTH = 3;
+  const DRAW_WIDTH = 1;
   let fabricCanvas = null;
   let drawingCanvasEl = null;
   
@@ -332,6 +332,18 @@
     nextRandomImages = [];
   }
   
+  function getAlbumFromImage(image) {
+    if (!image) return null;
+    const path = image.path || image.relative_path || '';
+    const pathParts = path.split('/');
+    // An image in the root has one path part (its name), or zero if path is empty.
+    // A path like 'album/image.jpg' has two parts.
+    if (pathParts.length <= 1) {
+      return '__root__'; // Special identifier for root-level images
+    }
+    return pathParts[pathParts.length - 2];
+  }
+  
   function getFirstImageForFolder(folder) {
     if (!images || !images.images || images.images.length === 0) {
       return null;
@@ -375,8 +387,34 @@
     if (nextRandomImages && nextRandomImages.length > 0) {
       newImage = nextRandomImages.shift();
     } else {
-      const randomIndex = Math.floor(Math.random() * filtered.length);
-      newImage = filtered[randomIndex];
+      // Buffer is empty, pick one respecting album rule.
+      const currentAlbum = getAlbumFromImage(currentImage);
+
+      // Prefer images from a different album.
+      let pool = filtered.filter(img => getAlbumFromImage(img) !== currentAlbum);
+
+      // If no images from other albums, use all available images.
+      if (pool.length === 0) {
+          pool = filtered;
+      }
+      
+      // From the pool, try to avoid picking the same image again if there are other options.
+      if (pool.length > 1 && currentImage) {
+          const notSameImagePool = pool.filter(p => p.url !== currentImage.url);
+          if (notSameImagePool.length > 0) {
+              pool = notSameImagePool;
+          }
+      }
+
+      // If we have a pool of candidates, pick one.
+      if (pool.length > 0) {
+          const randomIndex = Math.floor(Math.random() * pool.length);
+          newImage = pool[randomIndex];
+      } else {
+          // This case should be rare: only one image available and it's the current one.
+          // `filtered` must have at least one image here.
+          newImage = filtered[0];
+      }
     }
     
     // Add new image to history
@@ -404,22 +442,43 @@
 
     if (!nextRandomImages) nextRandomImages = [];
 
-    const totalImages = filtered.length;
-    const currentUrl = currentImage?.url;
+    // The image to compare against for album difference.
+    // Start with currentImage if buffer is empty, otherwise last image in buffer.
+    let prevImage = nextRandomImages.length > 0 ? nextRandomImages[nextRandomImages.length - 1] : currentImage;
 
-    // Fill the buffer up to 'count' items
+    // Collect all urls that are currently in use (current or in buffer) to avoid duplicates
+    const usedUrls = new Set(nextRandomImages.map(img => img.url));
+    if (currentImage) {
+      usedUrls.add(currentImage.url);
+    }
+    
     while (nextRandomImages.length < count) {
-      const randomIndex = Math.floor(Math.random() * totalImages);
-      const candidate = filtered[randomIndex];
+      const prevAlbum = getAlbumFromImage(prevImage);
 
-      // Avoid immediate duplicates with current or already buffered URLs
-      const alreadyBuffered = nextRandomImages.some(img => img.url === candidate.url);
-      if (candidate.url !== currentUrl && !alreadyBuffered) {
-        nextRandomImages.push(candidate);
-        preloadImage(candidate.url);
+      // Find candidates from different albums and not already used.
+      let candidates = filtered.filter(img => {
+        return getAlbumFromImage(img) !== prevAlbum && !usedUrls.has(img.url);
+      });
+
+      // If no candidates in other albums, fall back to any album (but still not used).
+      if (candidates.length === 0) {
+        candidates = filtered.filter(img => !usedUrls.has(img.url));
       }
-      // If duplicate encountered, loop continues until filled (or best effort if all same)
-      if (totalImages <= 1) break;
+      
+      // If still no candidates, we can't add more images, so break.
+      if (candidates.length === 0) {
+        break;
+      }
+
+      // Pick a random candidate.
+      const randomIndex = Math.floor(Math.random() * candidates.length);
+      const newImage = candidates[randomIndex];
+      
+      // Add to buffer and update prevImage for next iteration.
+      nextRandomImages.push(newImage);
+      usedUrls.add(newImage.url);
+      preloadImage(newImage.url);
+      prevImage = newImage;
     }
   }
 
