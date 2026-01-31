@@ -726,6 +726,7 @@
   }
 
   function preloadAdjacentImages() {
+    if (appMode === 'drawing') return;
     if (!images?.images || images.images.length === 0) return;
 
     const currentIndex = getCurrentImageIndex();
