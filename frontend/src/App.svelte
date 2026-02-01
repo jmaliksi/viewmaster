@@ -9,6 +9,27 @@
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
+  /**
+   * Shuffles an array in-place using the Fisher-Yates algorithm.
+   * @param {Array} array The array to shuffle.
+   * @returns {Array} The shuffled array.
+   */
+  function shuffleArray(array) {
+    let currentIndex = array.length, randomIndex;
+
+    // While there remain elements to shuffle.
+    while (currentIndex !== 0) {
+      // Pick a remaining element.
+      randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex--;
+
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    }
+
+    return array;
+  }
+
   // Main app mode state machine
   let appMode = $state('loading'); // 'login' | 'loading' | 'start' | 'viewing' | 'drawing' | 'stopped' | 'error'
   
@@ -20,8 +41,9 @@
   let historyIndex = $state(-1);
   let mouseTimeout = null;
   
-  // Image preloading state
-  let nextRandomImages = $state([]); // buffer of upcoming random images
+  let imagePlaylist = $state([]);
+  let playlistIndex = $state(0);
+  let shuffledFolders = $state([]);
   
   // Folder filtering state
   let availableFolders = $state([]);
@@ -317,19 +339,16 @@
     }
     checkedFolders = newChecked;
     // Clear preloaded random images buffer when folder selection changes
-    nextRandomImages = [];
+    initializeImagePlaylist();
   }
   
   function toggleAllFolders() {
     if (checkedFolders.size === availableFolders.length) {
-      // Uncheck all
       checkedFolders = new Set();
     } else {
-      // Check all
       checkedFolders = new Set(availableFolders);
     }
-    // Clear preloaded random images buffer when folder selection changes
-    nextRandomImages = [];
+    initializeImagePlaylist();
   }
   
   function getAlbumFromImage(image) {
@@ -344,141 +363,84 @@
     return pathParts[pathParts.length - 2];
   }
   
-  function getFirstImageForFolder(folder) {
-    if (!images || !images.images || images.images.length === 0) {
-      return null;
+  function initializeImagePlaylist() {
+    const filtered = filteredImages;
+    if (!filtered || filtered.length === 0) {
+      imagePlaylist = [];
+      playlistIndex = 0;
+      return;
+    }
+
+    if (shuffledFolders.length === 0) {
+      const folders = new Set(filtered.map(getAlbumFromImage));
+      shuffledFolders = shuffleArray(Array.from(folders));
     }
     
-    // Find the first image that belongs to this folder
-    for (const img of images.images) {
-      const pathParts = (img.path || img.relative_path || '').split('/');
-      if (pathParts.length > 1) {
-        const parentFolder = pathParts[pathParts.length - 2];
-        if (parentFolder === folder) {
-          return img.url;
+    const imagesByFolder = shuffledFolders.map(folder => {
+      const imagesInFolder = filtered.filter(img => getAlbumFromImage(img) === folder);
+      return shuffleArray(imagesInFolder); // Shuffle images within the folder
+    });
+
+    let finalPlaylist = [];
+    let maxLength = 0;
+    imagesByFolder.forEach(group => {
+      if (group.length > maxLength) {
+        maxLength = group.length;
+      }
+    });
+
+    for (let i = 0; i < maxLength; i++) {
+      for (const group of imagesByFolder) {
+        if (group[i]) {
+          finalPlaylist.push(group[i]);
         }
       }
     }
     
-    return null;
+    imagePlaylist = finalPlaylist;
+    playlistIndex = 0;
   }
-  
-  function startSession() {
-    appMode = 'viewing';
-    pickRandomImage();
-    // Preload a batch of images for smoother navigation
-    preloadBatch(5);
-    // Start the timer
-    timer.playing = true;
-    timer.remaining = timer.duration;
-    startTimer();
+
+  function getNextImageFromPlaylist() {
+    if (playlistIndex >= imagePlaylist.length) {
+      shuffledFolders = [];
+      initializeImagePlaylist();
+
+      if (imagePlaylist.length === 0) return null; // No images found even after reset
+    }
+
+    const newImage = imagePlaylist[playlistIndex];
+    playlistIndex++;
+    return newImage;
   }
 
   function pickRandomImage() {
-    const filtered = filteredImages;
-    if (!filtered || filtered.length === 0) {
+    const newImage = getNextImageFromPlaylist();
+    if (!newImage) {
       currentImage = null;
       return;
     }
-
-    let newImage;
-
-    // Use preloaded random image from buffer if available, otherwise pick a new one
-    if (nextRandomImages && nextRandomImages.length > 0) {
-      newImage = nextRandomImages.shift();
-    } else {
-      // Buffer is empty, pick one respecting album rule.
-      const currentAlbum = getAlbumFromImage(currentImage);
-
-      // Prefer images from a different album.
-      let pool = filtered.filter(img => getAlbumFromImage(img) !== currentAlbum);
-
-      // If no images from other albums, use all available images.
-      if (pool.length === 0) {
-          pool = filtered;
-      }
-      
-      // From the pool, try to avoid picking the same image again if there are other options.
-      if (pool.length > 1 && currentImage) {
-          const notSameImagePool = pool.filter(p => p.url !== currentImage.url);
-          if (notSameImagePool.length > 0) {
-              pool = notSameImagePool;
-          }
-      }
-
-      // If we have a pool of candidates, pick one.
-      if (pool.length > 0) {
-          const randomIndex = Math.floor(Math.random() * pool.length);
-          newImage = pool[randomIndex];
-      } else {
-          // This case should be rare: only one image available and it's the current one.
-          // `filtered` must have at least one image here.
-          newImage = filtered[0];
-      }
-    }
     
-    // Add new image to history
     imageHistory = [...imageHistory, newImage];
     historyIndex = imageHistory.length - 1;
     
-    // Keep history bounded
     if (imageHistory.length > MAX_HISTORY_SIZE) {
       imageHistory = imageHistory.slice(-MAX_HISTORY_SIZE);
       historyIndex = imageHistory.length - 1;
     }
     
     currentImage = newImage;
-    
-    // Preload adjacent images after setting current image
-    preloadAdjacentImages();
-    
-    // Top up the next random images buffer
-    preloadNextRandomImages(2);
+    preloadNextImages();
   }
 
-  function preloadNextRandomImages(count = 2) {
-    const filtered = filteredImages;
-    if (!filtered || filtered.length === 0) return;
+  function preloadNextImages(count = 2) {
+    if (!imagePlaylist || imagePlaylist.length === 0) return;
 
-    if (!nextRandomImages) nextRandomImages = [];
-
-    // The image to compare against for album difference.
-    // Start with currentImage if buffer is empty, otherwise last image in buffer.
-    let prevImage = nextRandomImages.length > 0 ? nextRandomImages[nextRandomImages.length - 1] : currentImage;
-
-    // Collect all urls that are currently in use (current or in buffer) to avoid duplicates
-    const usedUrls = new Set(nextRandomImages.map(img => img.url));
-    if (currentImage) {
-      usedUrls.add(currentImage.url);
-    }
-    
-    while (nextRandomImages.length < count) {
-      const prevAlbum = getAlbumFromImage(prevImage);
-
-      // Find candidates from different albums and not already used.
-      let candidates = filtered.filter(img => {
-        return getAlbumFromImage(img) !== prevAlbum && !usedUrls.has(img.url);
-      });
-
-      // If no candidates in other albums, fall back to any album (but still not used).
-      if (candidates.length === 0) {
-        candidates = filtered.filter(img => !usedUrls.has(img.url));
+    for (let i = 0; i < count; i++) {
+      const nextPlaylistIndex = playlistIndex + i;
+      if (nextPlaylistIndex < imagePlaylist.length) {
+        preloadImage(imagePlaylist[nextPlaylistIndex].url);
       }
-      
-      // If still no candidates, we can't add more images, so break.
-      if (candidates.length === 0) {
-        break;
-      }
-
-      // Pick a random candidate.
-      const randomIndex = Math.floor(Math.random() * candidates.length);
-      const newImage = candidates[randomIndex];
-      
-      // Add to buffer and update prevImage for next iteration.
-      nextRandomImages.push(newImage);
-      usedUrls.add(newImage.url);
-      preloadImage(newImage.url);
-      prevImage = newImage;
     }
   }
 
@@ -486,11 +448,9 @@
     if (appMode === 'start') {
       appMode = 'viewing';
     }
-    // Save current drawing before moving to next image
     if (fabricCanvas && currentImage) {
       saveCurrentDrawing();
     }
-    // Clear drawing canvas for next image
     if (fabricCanvas) {
       fabricCanvas.clear();
       if (fabricCanvas.isDrawingMode) {
@@ -500,12 +460,10 @@
         }
       }
     }
-    // If we're not at the end of history, go forward
     if (historyIndex < imageHistory.length - 1) {
       historyIndex++;
       currentImage = imageHistory[historyIndex];
     } else {
-      // Otherwise, pick a new random image
       pickRandomImage();
     }
     // Reset timer when image changes if playing
@@ -639,7 +597,8 @@
     currentImage = null;
     imageHistory = [];
     historyIndex = -1;
-    nextRandomImages = [];
+    imagePlaylist = [];
+    playlistIndex = 0;
   }
 
   function resetMouseTimeout() {
@@ -935,7 +894,7 @@
       {:else if appMode === 'start'}
         <div class="start-container">
           <div class="start-content">
-            <button class="start-btn" onclick={startSession}>
+            <button class="start-btn" onclick={goToNextImage}>
               Start
             </button>
             {#if availableFolders.length > 0}
