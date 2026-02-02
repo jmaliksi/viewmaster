@@ -49,6 +49,7 @@
   let availableFolders = $state([]);
   let checkedFolders = $state(new Set());
   let folderDropdownOpen = $state(false);
+  let folderThumbnails = $state(new Map());
   
   // Consolidated timer state
   let timer = $state({
@@ -310,10 +311,12 @@
     if (!images || !images.images || images.images.length === 0) {
       availableFolders = [];
       checkedFolders = new Set();
+      folderThumbnails = new Map();
       return;
     }
     
     const folders = new Set();
+    const thumbnails = new Map();
     
     images.images.forEach(img => {
       const pathParts = (img.path || img.relative_path || '').split('/');
@@ -321,10 +324,14 @@
       if (pathParts.length > 1) {
         const parentFolder = pathParts[pathParts.length - 2];
         folders.add(parentFolder);
+        if (!thumbnails.has(parentFolder)) {
+          thumbnails.set(parentFolder, img.url);
+        }
       }
     });
     
     availableFolders = Array.from(folders).sort();
+    folderThumbnails = thumbnails;
     
     // Always initialize all folders as checked (no localStorage persistence)
     checkedFolders = new Set(availableFolders);
@@ -349,6 +356,10 @@
       checkedFolders = new Set(availableFolders);
     }
     initializeImagePlaylist();
+  }
+  
+  function getFirstImageForFolder(folderName) {
+    return folderThumbnails.get(folderName) || null;
   }
   
   function getAlbumFromImage(image) {
