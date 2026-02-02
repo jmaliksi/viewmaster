@@ -110,6 +110,27 @@
   // Image opacity control (0-100%)
   let imageOpacity = $state(100); // Default 100% opacity
 
+  let currentImageInfo = $derived.by(() => {
+    if (!currentImage) return '';
+    
+    const path = currentImage.path || currentImage.relative_path || '';
+    const filename = currentImage.filename;
+    
+    if (!path || !filename) {
+        return filename || path || '';
+    }
+
+    const parts = path.split('/');
+    if (parts.length > 1) {
+      const parentDir = parts[parts.length - 2];
+      if (parentDir) {
+        return `${parentDir}/${filename}`;
+      }
+    }
+    
+    return filename;
+  });
+
   function initFabricIfNeeded() {
     if (!drawingCanvasEl) return;
     if (!fabricCanvas) {
@@ -1046,7 +1067,12 @@
 
 {#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
-    <div class="bottom-actions">
+    <div class="bottom-actions" style="display: flex; width: 100%; align-items: center;">
+      <div class="image-info" style="margin-right: auto; padding-left: 1rem; font-family: monospace; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        {#if !timer.playing}
+          {currentImageInfo}
+        {/if}
+      </div>
       <label class="opacity-slider-label">
         <span>Opacity:</span>
         <input
