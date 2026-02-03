@@ -1036,7 +1036,7 @@
           </div>
         </div>
       {:else if (appMode === 'viewing' || appMode === 'drawing') && currentImage}
-        <div class="image-container">
+        <figure class="image-container">
           {#if showTimerBar}
             <div class="timer-bar" style="width: {timerProgress * 100}%"></div>
           {/if}
@@ -1064,7 +1064,7 @@
           >
             →
           </button>
-        </div>
+        </figure>
       {:else if images && images.images && images.images.length === 0}
         <p>No images available.</p>
       {:else}
@@ -1177,6 +1177,21 @@
 {/if}
 
 <style>
+  .image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    margin: 0; /* for figure */
+  }
+
+  .display-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
   .folder-filter-input {
     width: calc(100% - 20px);
     padding: 8px;
