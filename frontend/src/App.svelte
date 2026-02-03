@@ -50,6 +50,7 @@
   let checkedFolders = $state(new Set());
   let folderDropdownOpen = $state(false);
   let folderThumbnails = $state(new Map());
+  let folderFilterText = $state('');
   
   // Consolidated timer state
   let timer = $state({
@@ -92,6 +93,13 @@
       const parentFolder = pathParts[pathParts.length - 2];
       return checkedFolders.has(parentFolder);
     });
+  });
+
+  let filteredAvailableFolders = $derived.by(() => {
+    if (!folderFilterText) return availableFolders;
+    return availableFolders.filter(folder =>
+      folder.toLowerCase().includes(folderFilterText.toLowerCase())
+    );
   });
 
   // Drawing mode state
@@ -371,11 +379,21 @@
   }
   
   function toggleAllFolders() {
-    if (checkedFolders.size === availableFolders.length) {
-      checkedFolders = new Set();
+    // These are the folders currently visible in the dropdown
+    const visibleFolders = filteredAvailableFolders;
+    
+    // Are all visible folders already checked?
+    const allVisibleChecked = visibleFolders.length > 0 && visibleFolders.every(f => checkedFolders.has(f));
+    
+    const newChecked = new Set(checkedFolders);
+    if (allVisibleChecked) {
+      // If all are checked, uncheck them
+      visibleFolders.forEach(folder => newChecked.delete(folder));
     } else {
-      checkedFolders = new Set(availableFolders);
+      // Otherwise, check all of them
+      visibleFolders.forEach(folder => newChecked.add(folder));
     }
+    checkedFolders = newChecked;
     initializeImagePlaylist();
   }
   
@@ -942,15 +960,29 @@
                 </button>
                 {#if folderDropdownOpen}
                   <div class="folder-checkboxes">
+                    <input
+                      type="text"
+                      placeholder="Filter by name..."
+                      bind:value={folderFilterText}
+                      class="folder-filter-input"
+                      onclick={(e) => e.stopPropagation()}
+                    />
                     <label class="folder-checkbox-item folder-checkbox-select-all">
                       <input
                         type="checkbox"
-                        checked={checkedFolders.size === availableFolders.length}
+                        checked={
+                          filteredAvailableFolders.length > 0 && 
+                          filteredAvailableFolders.every(f => checkedFolders.has(f))
+                        }
+                        indeterminate={
+                          filteredAvailableFolders.some(f => checkedFolders.has(f)) && 
+                          !filteredAvailableFolders.every(f => checkedFolders.has(f))
+                        }
                         onchange={toggleAllFolders}
                       />
-                      <span>Select All</span>
+                      <span>Select All (filtered)</span>
                     </label>
-                    {#each availableFolders as folder}
+                    {#each filteredAvailableFolders as folder}
                       {@const thumbnailUrl = getFirstImageForFolder(folder)}
                       <label class="folder-checkbox-item">
                         {#if thumbnailUrl}
@@ -1141,3 +1173,21 @@
     </div>
   </footer>
 {/if}
+
+<style>
+  .folder-filter-input {
+    width: calc(100% - 20px);
+    padding: 8px;
+    margin: 5px 10px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background-color: #222;
+    color: #eee;
+    box-sizing: border-box;
+  }
+
+  .folder-filter-input:focus {
+    outline: none;
+    border-color: #666;
+  }
+</style>
