@@ -375,6 +375,7 @@
     }
     checkedFolders = newChecked;
     // Clear preloaded random images buffer when folder selection changes
+    shuffledFolders = [];
     initializeImagePlaylist();
   }
   
@@ -394,6 +395,7 @@
       visibleFolders.forEach(folder => newChecked.add(folder));
     }
     checkedFolders = newChecked;
+    shuffledFolders = [];
     initializeImagePlaylist();
   }
   
