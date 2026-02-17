@@ -19,6 +19,7 @@ from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     BEARER_TOKEN_COOKIE_NAME,
 )
+from app.cache import get_cached_images, cache_images, is_cache_valid
 
 router = APIRouter(prefix="/api", tags=["api"])
 security = HTTPBearer()
@@ -229,6 +230,12 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
             detail=f"Configured images path '{images_dir}' is not a directory"
         )
 
+    # Check cache first
+    if is_cache_valid(images_dir):
+        cached = get_cached_images()
+        assert cached is not None
+        return cached
+
     # Recursively find all image files
     image_paths = [
         p for p in images_dir.rglob("*")
@@ -250,12 +257,16 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
     # Sort images by path for consistent ordering
     images.sort(key=lambda x: x["path"])
 
-    return {
+    result = {
         "directory": str(images_dir),
         "total_images": len(images),
         "images": images,
         "aspect_ratios": aspect_ratio_counts,
     }
+
+    cache_images(result, images_dir)
+
+    return result
 
 
 @router.get("/images/{image_path:path}")
