@@ -1,6 +1,7 @@
 """
 API routes
 """
+from concurrent.futures import ThreadPoolExecutor
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -63,9 +64,7 @@ def get_aspect_ratio(width: int, height: int) -> str:
 # Skip SVG and ICO for aspect ratio detection (not supported by PIL)
 ASPECT_RATIO_SKIP_EXTENSIONS = {".svg", ".ico"}
 
-# Get images directory from environment variable, default to "images"
 IMAGES_DIRECTORY = os.getenv("IMAGES_DIRECTORY", "images")
-
 
 def get_images_directory() -> Path:
     """Resolve the images directory path from environment variable"""
@@ -75,6 +74,44 @@ def get_images_directory() -> Path:
         return Path(images_dir_str)
     else:
         return project_root / images_dir_str
+
+
+def process_image_file(image_path: Path, images_dir: Path) -> Dict[str, Any] | None:
+    """Process a single image file and return its metadata."""
+    try:
+        stat = image_path.stat()
+        relative_path = image_path.relative_to(images_dir)
+
+        url_path_parts = ["/api/images"] + [quote(part) for part in relative_path.parts]
+        url = "/".join(url_path_parts)
+
+        width = 0
+        height = 0
+        aspect_ratio = "unknown"
+
+        if image_path.suffix.lower() not in ASPECT_RATIO_SKIP_EXTENSIONS:
+            try:
+                with Image.open(image_path) as img:
+                    width, height = img.size
+                    aspect_ratio = get_aspect_ratio(width, height)
+            except Exception:
+                pass
+
+        return {
+            "path": str(relative_path),
+            "full_path": str(image_path),
+            "relative_path": str(relative_path),
+            "filename": image_path.name,
+            "extension": image_path.suffix.lower(),
+            "size": stat.st_size,
+            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+            "url": url,
+            "width": width,
+            "height": height,
+            "aspect_ratio": aspect_ratio,
+        }
+    except (OSError, PermissionError):
+        return None
 
 
 # Authentication models
@@ -193,53 +230,22 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
         )
 
     # Recursively find all image files
+    image_paths = [
+        p for p in images_dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    ]
+
+    # Process images in parallel
     images: List[Dict[str, Any]] = []
     aspect_ratio_counts: Dict[str, int] = {}
 
-    for image_path in images_dir.rglob("*"):
-        if image_path.is_file() and image_path.suffix.lower() in IMAGE_EXTENSIONS:
-            try:
-                stat = image_path.stat()
-                # Get relative path from the images directory
-                relative_path = image_path.relative_to(images_dir)
-
-                # Build URL path for the image (URL encode each part of the path)
-                url_path_parts = ["/api/images"] + [quote(part) for part in relative_path.parts]
-                url = "/".join(url_path_parts)
-
-                # Calculate aspect ratio using PIL (skip for unsupported formats)
-                width = 0
-                height = 0
-                aspect_ratio = "unknown"
-
-                if image_path.suffix.lower() not in ASPECT_RATIO_SKIP_EXTENSIONS:
-                    try:
-                        with Image.open(image_path) as img:
-                            width, height = img.size
-                            aspect_ratio = get_aspect_ratio(width, height)
-                    except Exception:
-                        pass  # Keep unknown if we can't read dimensions
-
-                # Track aspect ratio counts
-                if aspect_ratio != "unknown":
-                    aspect_ratio_counts[aspect_ratio] = aspect_ratio_counts.get(aspect_ratio, 0) + 1
-
-                images.append({
-                    "path": str(relative_path),
-                    "full_path": str(image_path),
-                    "relative_path": str(relative_path),
-                    "filename": image_path.name,
-                    "extension": image_path.suffix.lower(),
-                    "size": stat.st_size,
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "url": url,
-                    "width": width,
-                    "height": height,
-                    "aspect_ratio": aspect_ratio,
-                })
-            except (OSError, PermissionError) as e:
-                # Skip files that can't be accessed
-                continue
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(process_image_file, image_paths, [images_dir] * len(image_paths))
+        for result in results:
+            if result is not None:
+                images.append(result)
+                if result["aspect_ratio"] != "unknown":
+                    aspect_ratio_counts[result["aspect_ratio"]] = aspect_ratio_counts.get(result["aspect_ratio"], 0) + 1
 
     # Sort images by path for consistent ordering
     images.sort(key=lambda x: x["path"])
