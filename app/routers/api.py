@@ -286,6 +286,10 @@ async def serve_image(
     path_parts = image_path.split("/")
     decoded_parts = [unquote(part) for part in path_parts]
 
+    for part in decoded_parts:
+        if os.path.isabs(part) or part.startswith(".."):
+            raise HTTPException(status_code=400, detail="Invalid path")
+
     # Construct the full file path
     image_file = images_dir / "/".join(decoded_parts)
 
