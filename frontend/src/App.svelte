@@ -136,6 +136,9 @@
   // Image opacity control (0-100%)
   let imageOpacity = $state(100); // Default 100% opacity
 
+  // Image fit mode: 'fit' = contain (fit inside), 'fill' = cover (fill viewport)
+  let imageFitMode = $state('fit');
+
   let currentImageInfo = $derived.by(() => {
     if (!currentImage) return '';
 
@@ -997,6 +1000,14 @@
           >
             {isFullscreen ? '⤓' : '⤢'}
           </button>
+          <button
+            class="fit-mode-btn"
+            onclick={() => imageFitMode = imageFitMode === 'fit' ? 'fill' : 'fit'}
+            aria-label={imageFitMode === 'fit' ? 'Fill viewport' : 'Fit in viewport'}
+            title={imageFitMode === 'fit' ? 'Fill viewport' : 'Fit in viewport'}
+          >
+            {imageFitMode === 'fit' ? '⊡' : '⊞'}
+          </button>
           {#if appMode === 'viewing'}
             <button class="stop-btn" onclick={stopSession} aria-label="Stop">⏹</button>
           {:else}
@@ -1185,7 +1196,8 @@
             src={currentImage.url}
             alt={currentImage.filename}
             class="display-image"
-            style="opacity: {imageOpacity / 100};"
+            class:fill-mode={imageFitMode === 'fill'}
+            style="opacity: {imageOpacity / 100}; object-fit: {imageFitMode === 'fill' ? 'cover' : 'contain'};"
           />
           <button
             class="arrow-btn right-arrow"

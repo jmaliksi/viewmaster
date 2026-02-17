@@ -187,6 +187,12 @@ header:hover > * {
   min-width: 2.5em;
 }
 
+.fit-mode-btn {
+  font-size: 1.1em;
+  padding: var(--spacing-sm) 0.9em;
+  min-width: 2.5em;
+}
+
 .play-pause-btn {
   font-size: 1.1em;
   padding: var(--spacing-sm) 0.9em;
