@@ -32,7 +32,7 @@
 
   // Main app mode state machine
   let appMode = $state('loading'); // 'login' | 'loading' | 'start' | 'viewing' | 'drawing' | 'stopped' | 'error'
-  
+
   let currentPath = $state('/');
   let images = $state(null);
   let currentImage = $state(null);
@@ -40,18 +40,24 @@
   let imageHistory = $state([]);
   let historyIndex = $state(-1);
   let mouseTimeout = null;
-  
+
   let imagePlaylist = $state([]);
   let playlistIndex = $state(0);
   let shuffledFolders = $state([]);
-  
+
   // Folder filtering state
   let availableFolders = $state([]);
   let checkedFolders = $state(new Set());
   let folderDropdownOpen = $state(false);
   let folderThumbnails = $state(new Map());
   let folderFilterText = $state('');
-  
+
+  // Aspect ratio filtering state
+  let availableAspectRatios = $state([]);
+  let checkedAspectRatios = $state(new Set());
+  let aspectRatioDropdownOpen = $state(false);
+  let aspectRatioFilterText = $state('');
+
   // Consolidated timer state
   let timer = $state({
     playing: false,
@@ -62,37 +68,49 @@
   });
   let timerInterval = null;
   let isFullscreen = $state(false);
-  
+
   // Consolidated UI visibility state
   let uiVisibility = $state({
     mouseActive: true,
     showDuringDraw: false
   });
- 
+
   // Computed: show timer warning in last 3 seconds
   let showTimerWarning = $derived(timer.remaining <= 3 && timer.playing);
-  
+
   // Computed: timer progress (0 to 1)
   let timerProgress = $derived(timer.duration > 0 ? timer.remaining / timer.duration : 0);
-  
+
   // Computed: show timer bar when UI is hidden and timer is playing (or always in drawing mode)
   let showTimerBar = $derived(timer.playing && currentImage !== null && (!uiVisibility.mouseActive || appMode === 'drawing'));
-  
-  // Computed: filtered images based on checked folders (always includes root images)
+
+  // Computed: filtered images based on checked folders and aspect ratios
   let filteredImages = $derived.by(() => {
     if (!images || !images.images || images.images.length === 0) return [];
-    
+
     return images.images.filter(img => {
       // Always include root images (no parent folder)
       const pathParts = (img.path || img.relative_path || '').split('/');
       if (pathParts.length <= 1) {
         return true; // Root image, always include
       }
-      
+
       // Get immediate parent folder
       const parentFolder = pathParts[pathParts.length - 2];
-      return checkedFolders.has(parentFolder);
+      if (!checkedFolders.has(parentFolder)) return false;
+
+      // Aspect ratio filter
+      const aspectRatio = img.aspect_ratio || 'unknown';
+      if (!checkedAspectRatios.has(aspectRatio)) return false;
+
+      return true;
     });
+  });
+
+  // Computed: aspect ratio image counts from full image list
+  let aspectRatioImageCounts = $derived.by(() => {
+    if (!images || !images.aspect_ratios) return {};
+    return images.aspect_ratios;
   });
 
   let filteredAvailableFolders = $derived.by(() => {
@@ -107,23 +125,23 @@
   const DRAW_WIDTH = 1;
   let fabricCanvas = null;
   let drawingCanvasEl = null;
-  
+
   // Drawing storage: Map of image URL -> drawing snapshot (data URL)
   let imageDrawings = $state(new Map());
   let showDrawingsInGallery = $state(true);
-  
+
   // Gallery size control (percentage of smaller viewport dimension)
   let gallerySizePercent = $state(25); // Default 25%, min 15%
-  
+
   // Image opacity control (0-100%)
   let imageOpacity = $state(100); // Default 100% opacity
 
   let currentImageInfo = $derived.by(() => {
     if (!currentImage) return '';
-    
+
     const path = currentImage.path || currentImage.relative_path || '';
     const filename = currentImage.filename;
-    
+
     if (!path || !filename) {
         return filename || path || '';
     }
@@ -135,7 +153,7 @@
         return `${parentDir}/${filename}`;
       }
     }
-    
+
     return filename;
   });
 
@@ -170,7 +188,7 @@
 
   function saveCurrentDrawing() {
     if (!fabricCanvas || !currentImage) return;
-    
+
     // Check if canvas has any drawing objects
     const objects = fabricCanvas.getObjects();
     if (objects.length === 0) {
@@ -178,7 +196,7 @@
       imageDrawings.delete(currentImage.url);
       return;
     }
-    
+
     // Save the canvas as a data URL
     // The canvas is fullscreen, but we'll overlay it on thumbnails in gallery
     // The browser will scale it appropriately when displayed
@@ -200,7 +218,7 @@
   function exitDrawingMode() {
     // Save drawing before exiting
     saveCurrentDrawing();
-    
+
     appMode = 'viewing';
     uiVisibility.showDuringDraw = false;
     if (fabricCanvas) {
@@ -231,13 +249,13 @@
   function toggleFullscreen() {
     const doc = document;
     const docEl = doc.documentElement;
-    
-    const isFullscreenActive = 
-      doc.fullscreenElement || 
-      doc.webkitFullscreenElement || 
-      doc.mozFullScreenElement || 
+
+    const isFullscreenActive =
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
       doc.msFullscreenElement;
-    
+
     if (!isFullscreenActive) {
       if (docEl.requestFullscreen) {
         docEl.requestFullscreen().catch(err => {
@@ -267,9 +285,9 @@
 
   function handleFullscreenChange() {
     isFullscreen = !!(
-      document.fullscreenElement || 
-      document.webkitFullscreenElement || 
-      document.mozFullScreenElement || 
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
       document.msFullscreenElement
     );
   }
@@ -277,11 +295,11 @@
   // Simple router
   async function checkRoute() {
     currentPath = window.location.pathname;
-    
+
     // Check authentication status
     appMode = 'loading';
     const authStatus = await isAuthenticated();
-    
+
     // If not authenticated and not on login page, redirect to login
     if (!authStatus && currentPath !== '/login') {
       window.history.pushState({}, '', '/login');
@@ -298,7 +316,7 @@
       await loadImages();
       return;
     }
-    
+
     // If authenticated and not on login page, load images
     if (authStatus && currentPath !== '/login') {
       await loadImages();
@@ -322,10 +340,10 @@
       }
 
       const data = await response.json();
-      
+
       // Keep in memory only
       images = data;
-      
+
       // Extract parent folders and initialize checked folders
       extractFolders();
       appMode = 'start';
@@ -341,12 +359,15 @@
       availableFolders = [];
       checkedFolders = new Set();
       folderThumbnails = new Map();
+      availableAspectRatios = [];
+      checkedAspectRatios = new Set();
       return;
     }
-    
+
     const folders = new Set();
     const thumbnails = new Map();
-    
+    const aspectRatios = new Set();
+
     images.images.forEach(img => {
       const pathParts = (img.path || img.relative_path || '').split('/');
       // If path has more than 1 part, it has a parent folder
@@ -357,15 +378,23 @@
           thumbnails.set(parentFolder, img.url);
         }
       }
+
+      // Extract aspect ratio
+      const aspectRatio = img.aspect_ratio || 'unknown';
+      aspectRatios.add(aspectRatio);
     });
-    
+
     availableFolders = Array.from(folders).sort();
     folderThumbnails = thumbnails;
-    
-    // Always initialize all folders as checked (no localStorage persistence)
+
+    // Initialize all folders as checked
     checkedFolders = new Set(availableFolders);
+
+    // Extract available aspect ratios from the data
+    availableAspectRatios = Array.from(aspectRatios).sort();
+    checkedAspectRatios = new Set(availableAspectRatios);
   }
-  
+
   function toggleFolder(folder) {
     const newChecked = new Set(checkedFolders);
     if (newChecked.has(folder)) {
@@ -378,14 +407,14 @@
     shuffledFolders = [];
     initializeImagePlaylist();
   }
-  
+
   function toggleAllFolders() {
     // These are the folders currently visible in the dropdown
     const visibleFolders = filteredAvailableFolders;
-    
+
     // Are all visible folders already checked?
     const allVisibleChecked = visibleFolders.length > 0 && visibleFolders.every(f => checkedFolders.has(f));
-    
+
     const newChecked = new Set(checkedFolders);
     if (allVisibleChecked) {
       // If all are checked, uncheck them
@@ -398,11 +427,52 @@
     shuffledFolders = [];
     initializeImagePlaylist();
   }
-  
+
+  function toggleAspectRatio(ratio) {
+    const newChecked = new Set(checkedAspectRatios);
+    if (newChecked.has(ratio)) {
+      newChecked.delete(ratio);
+    } else {
+      newChecked.add(ratio);
+    }
+    checkedAspectRatios = newChecked;
+    shuffledFolders = [];
+    initializeImagePlaylist();
+  }
+
+  function toggleAllAspectRatios() {
+    const visibleRatios = availableAspectRatios;
+
+    const allVisibleChecked = visibleRatios.length > 0 && visibleRatios.every(r => checkedAspectRatios.has(r));
+
+    const newChecked = new Set(checkedAspectRatios);
+    if (allVisibleChecked) {
+      visibleRatios.forEach(ratio => newChecked.delete(ratio));
+    } else {
+      visibleRatios.forEach(ratio => newChecked.add(ratio));
+    }
+    checkedAspectRatios = newChecked;
+    shuffledFolders = [];
+    initializeImagePlaylist();
+  }
+
+  function getAspectRatioIcon(ratio) {
+    const icons = {
+      '1:1': { w: 16, h: 16 },
+      '4:3': { w: 16, h: 12 },
+      '3:2': { w: 16, h: 10.67 },
+      '16:9': { w: 16, h: 9 },
+      '2:3': { w: 10.67, h: 16 },
+      '9:16': { w: 9, h: 16 },
+      'unknown': { w: 16, h: 16 },
+    };
+    return icons[ratio] || icons['unknown'];
+  }
+
   function getFirstImageForFolder(folderName) {
     return folderThumbnails.get(folderName) || null;
   }
-  
+
   function getAlbumFromImage(image) {
     if (!image) return null;
     const path = image.path || image.relative_path || '';
@@ -414,7 +484,7 @@
     }
     return pathParts[pathParts.length - 2];
   }
-  
+
   function initializeImagePlaylist() {
     const filtered = filteredImages;
     if (!filtered || filtered.length === 0) {
@@ -427,7 +497,7 @@
       const folders = new Set(filtered.map(getAlbumFromImage));
       shuffledFolders = shuffleArray(Array.from(folders));
     }
-    
+
     const imagesByFolder = shuffledFolders.map(folder => {
       const imagesInFolder = filtered.filter(img => getAlbumFromImage(img) === folder);
       return shuffleArray(imagesInFolder); // Shuffle images within the folder
@@ -448,7 +518,7 @@
         }
       }
     }
-    
+
     imagePlaylist = finalPlaylist;
     playlistIndex = 0;
   }
@@ -472,15 +542,15 @@
       currentImage = null;
       return;
     }
-    
+
     imageHistory = [...imageHistory, newImage];
     historyIndex = imageHistory.length - 1;
-    
+
     if (imageHistory.length > MAX_HISTORY_SIZE) {
       imageHistory = imageHistory.slice(-MAX_HISTORY_SIZE);
       historyIndex = imageHistory.length - 1;
     }
-    
+
     currentImage = newImage;
     preloadNextImages();
   }
@@ -594,7 +664,7 @@
     } catch (err) {
       console.error('Logout error:', err);
     }
-    
+
     // Clear auth cache and images
     clearAuthCache();
     localStorage.removeItem(IMAGES_STORAGE_KEY);
@@ -604,7 +674,7 @@
     imageHistory = [];
     historyIndex = -1;
     appMode = 'login';
-    
+
     // Redirect to login
     window.history.pushState({}, '', '/login');
     currentPath = '/login';
@@ -615,7 +685,7 @@
     if (fabricCanvas && currentImage) {
       saveCurrentDrawing();
     }
-    
+
     // Clear the drawing canvas
     if (fabricCanvas) {
       fabricCanvas.clear();
@@ -626,7 +696,7 @@
         }
       }
     }
-    
+
     appMode = 'stopped';
     // Stop the timer
     timer.playing = false;
@@ -762,7 +832,7 @@
     if (currentIndex === -1) return;
 
     const totalImages = images.images.length;
-    
+
     // Preload 'count' images ahead
     for (let i = 1; i <= count; i++) {
       const nextIndex = (currentIndex + i) % totalImages;
@@ -774,10 +844,10 @@
   function handleKeydown(event) {
     // Only handle keyboard shortcuts when not on login page
     if (appMode === 'login' || currentPath === '/login') return;
-    
+
     // Don't handle keyboard shortcuts when editing timer
     if (timer.editing) return;
-    
+
     switch (event.key) {
       case 'Escape':
         if (appMode === 'drawing') {
@@ -807,10 +877,10 @@
   // Check route on mount and when path changes
   onMount(() => {
     checkRoute();
-    
+
     // Listen for popstate events (back/forward navigation)
     window.addEventListener('popstate', checkRoute);
-    
+
     // Track mouse activity
     resetMouseTimeout();
     window.addEventListener('mousemove', resetMouseTimeout);
@@ -821,10 +891,10 @@
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
-    
+
     // Listen for keyboard events
     document.addEventListener('keydown', handleKeydown);
-    
+
     // Check initial fullscreen state
     handleFullscreenChange();
 
@@ -853,16 +923,16 @@
       <h1 class="header-title">ViewMaster</h1>
       <div class="header-center">
         <div class="playback-controls">
-          <button 
-            class="prev-btn" 
+          <button
+            class="prev-btn"
             onclick={goToPreviousImage}
             disabled={historyIndex <= 0}
             aria-label="Previous"
           >
             <span style="display: flex; align-items: center; justify-content: center; height: 100%">&laquo;</span>
           </button>
-          <button 
-            class="play-pause-btn" 
+          <button
+            class="play-pause-btn"
             onclick={togglePlayPause}
             disabled={!images || !images.images || images.images.length === 0}
             aria-label={timer.playing ? 'Pause' : 'Play'}
@@ -900,8 +970,8 @@
               </button>
             {/if}
           </div>
-          <button 
-            class="next-btn" 
+          <button
+            class="next-btn"
             onclick={goToNextImage}
             disabled={!images || !images.images || images.images.length === 0}
             aria-label="Next"
@@ -919,8 +989,8 @@
             New Session
           </button>
         {:else}
-          <button 
-            class="fullscreen-btn" 
+          <button
+            class="fullscreen-btn"
             onclick={toggleFullscreen}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
@@ -951,7 +1021,7 @@
             </button>
             {#if availableFolders.length > 0}
               <div class="folder-filter">
-                <button 
+                <button
                   class="folder-filter-toggle"
                   onclick={() => folderDropdownOpen = !folderDropdownOpen}
                   aria-label="Toggle folder filter"
@@ -973,11 +1043,11 @@
                       <input
                         type="checkbox"
                         checked={
-                          filteredAvailableFolders.length > 0 && 
+                          filteredAvailableFolders.length > 0 &&
                           filteredAvailableFolders.every(f => checkedFolders.has(f))
                         }
                         indeterminate={
-                          filteredAvailableFolders.some(f => checkedFolders.has(f)) && 
+                          filteredAvailableFolders.some(f => checkedFolders.has(f)) &&
                           !filteredAvailableFolders.every(f => checkedFolders.has(f))
                         }
                         onchange={toggleAllFolders}
@@ -988,8 +1058,8 @@
                       {@const thumbnailUrl = getFirstImageForFolder(folder)}
                       <label class="folder-checkbox-item">
                         {#if thumbnailUrl}
-                          <img 
-                            src={thumbnailUrl} 
+                          <img
+                            src={thumbnailUrl}
                             alt=""
                             class="folder-thumbnail"
                             loading="lazy"
@@ -1007,6 +1077,68 @@
                 {/if}
               </div>
             {/if}
+            {#if availableAspectRatios.length > 0}
+              <div class="folder-filter">
+                <button
+                  class="folder-filter-toggle"
+                  onclick={() => aspectRatioDropdownOpen = !aspectRatioDropdownOpen}
+                  aria-label="Toggle aspect ratio filter"
+                  aria-expanded={aspectRatioDropdownOpen}
+                >
+                  <span>Filter Aspect Ratios</span>
+                  <span class="folder-filter-icon">{aspectRatioDropdownOpen ? '▼' : '▶'}</span>
+                </button>
+                {#if aspectRatioDropdownOpen}
+                  <div class="folder-checkboxes">
+                    <input
+                      type="text"
+                      placeholder="Filter by ratio..."
+                      bind:value={aspectRatioFilterText}
+                      class="folder-filter-input"
+                      onclick={(e) => e.stopPropagation()}
+                    />
+                    <label class="folder-checkbox-item folder-checkbox-select-all">
+                      <input
+                        type="checkbox"
+                        checked={
+                          availableAspectRatios.length > 0 &&
+                          availableAspectRatios.every(r => checkedAspectRatios.has(r))
+                        }
+                        indeterminate={
+                          availableAspectRatios.some(r => checkedAspectRatios.has(r)) &&
+                          !availableAspectRatios.every(r => checkedAspectRatios.has(r))
+                        }
+                        onchange={toggleAllAspectRatios}
+                      />
+                      <span>Select All</span>
+                    </label>
+                    {#each availableAspectRatios.filter(r => !aspectRatioFilterText || r.toLowerCase().includes(aspectRatioFilterText.toLowerCase())) as ratio}
+                      {@const icon = getAspectRatioIcon(ratio)}
+                      {@const count = aspectRatioImageCounts[ratio] || 0}
+                      <label class="folder-checkbox-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" style="margin-right: 8px; flex-shrink: 0;">
+                          <rect
+                            x={(24 - icon.w) / 2}
+                            y={(24 - icon.h) / 2}
+                            width={icon.w}
+                            height={icon.h}
+                            fill="none"
+                            stroke="#888"
+                            stroke-width="1.5"
+                          />
+                        </svg>
+                        <input
+                          type="checkbox"
+                          checked={checkedAspectRatios.has(ratio)}
+                          onchange={() => toggleAspectRatio(ratio)}
+                        />
+                        <span>{ratio} ({count})</span>
+                      </label>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </div>
         </div>
       {:else if appMode === 'stopped'}
@@ -1017,16 +1149,16 @@
             {#each imageHistory as image}
               {@const hasDrawing = imageDrawings.has(image.url) && showDrawingsInGallery}
               <div class="gallery-item">
-                <img 
-                  src={image.url} 
+                <img
+                  src={image.url}
                   alt={image.filename}
                   class="gallery-thumbnail"
                   loading="lazy"
                   style="opacity: {imageOpacity / 100};"
                 />
                 {#if hasDrawing}
-                  <img 
-                    src={imageDrawings.get(image.url)} 
+                  <img
+                    src={imageDrawings.get(image.url)}
                     alt="Drawing overlay"
                     class="gallery-drawing-overlay"
                   />
@@ -1040,8 +1172,8 @@
           {#if showTimerBar}
             <div class="timer-bar" style="width: {timerProgress * 100}%"></div>
           {/if}
-          <button 
-            class="arrow-btn left-arrow" 
+          <button
+            class="arrow-btn left-arrow"
             class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToPreviousSequential}
             disabled={!images || !images.images || images.images.length === 0}
@@ -1049,14 +1181,14 @@
           >
             ←
           </button>
-          <img 
-            src={currentImage.url} 
+          <img
+            src={currentImage.url}
             alt={currentImage.filename}
             class="display-image"
             style="opacity: {imageOpacity / 100};"
           />
-          <button 
-            class="arrow-btn right-arrow" 
+          <button
+            class="arrow-btn right-arrow"
             class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToNextSequential}
             disabled={!images || !images.images || images.images.length === 0}
@@ -1120,14 +1252,14 @@
         />
         <span class="opacity-percent">{imageOpacity}%</span>
       </label>
-      <button 
+      <button
         class="draw-toggle-btn"
         onclick={enterDrawingMode}
         disabled={!images || !images.images || images.images.length === 0}
         aria-label="Enter drawing mode"
         title="Enter drawing mode (Esc to exit)"
       >✎ Draw</button>
-      <button 
+      <button
         class="clear-draw-btn"
         onclick={clearDrawingCanvas}
         aria-label="Clear drawing"
@@ -1164,7 +1296,7 @@
         />
         <span class="gallery-size-percent">{gallerySizePercent}%</span>
       </label>
-      <button 
+      <button
         class="toggle-drawings-btn"
         onclick={() => showDrawingsInGallery = !showDrawingsInGallery}
         aria-label={showDrawingsInGallery ? 'Hide drawings' : 'Show drawings'}
