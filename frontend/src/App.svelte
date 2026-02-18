@@ -165,7 +165,8 @@
     if (!fabricCanvas) {
       fabricCanvas = new fabric.Canvas(drawingCanvasEl, {
         isDrawingMode: true,
-        selection: false
+        selection: false,
+        allowTouchScrolling: false
       });
     }
     fabricCanvas.isDrawingMode = true;
@@ -1321,6 +1322,10 @@
 {/if}
 
 <style>
+  :global(html), :global(body) {
+    overscroll-behavior-y: none;
+  }
+
   .image-container {
     display: flex;
     justify-content: center;
