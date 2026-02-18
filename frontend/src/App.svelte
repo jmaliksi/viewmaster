@@ -125,6 +125,7 @@
   const DRAW_WIDTH = 1;
   let fabricCanvas = null;
   let drawingCanvasEl = null;
+  let drawingOverlayEl = null;
 
   // Drawing storage: Map of image URL -> drawing snapshot (data URL)
   let imageDrawings = $state(new Map());
@@ -178,6 +179,38 @@
     fabricCanvas.setWidth(window.innerWidth);
     fabricCanvas.setHeight(window.innerHeight);
     fabricCanvas.renderAll();
+  }
+
+  function handleDrawingTouchStart(e) {
+    if (appMode !== 'drawing') return;
+    
+    // Two-finger tap exits draw mode (do not clear)
+    if (e.touches && e.touches.length === 2) {
+      e.preventDefault();
+      exitDrawingMode();
+      uiVisibility.showDuringDraw = false;
+    } else if (e.touches && e.touches.length === 1) {
+      // Resume drawing: hide UI again
+      uiVisibility.showDuringDraw = false;
+    }
+  }
+
+  function handleDrawingTouchMove(e) {
+    if (appMode !== 'drawing') return;
+    // Prevent pull-to-refresh / pull-to-exit-fullscreen on iOS
+    // Only prevent default for single touch (drawing), allow two-finger gestures
+    if (e.touches && e.touches.length === 1) {
+      e.preventDefault();
+    }
+  }
+
+  function handleDrawingPointerDown(e) {
+    if (appMode !== 'drawing') return;
+    // Any pen/mouse/touch press resumes drawing; hide UI
+    // Using pointer events to avoid virtual keyboard warning on iOS
+    if (e.pointerType === 'pen' || e.pointerType === 'mouse' || e.pointerType === 'touch') {
+      uiVisibility.showDuringDraw = false;
+    }
   }
 
   function enterDrawingMode() {
@@ -917,6 +950,22 @@
       stopTimer();
     };
   });
+
+  // Set up native touch/pointer event listeners on drawing overlay
+  // Using { passive: false } to allow preventDefault() to block pull-to-refresh
+  $effect(() => {
+    if (!drawingOverlayEl) return;
+
+    drawingOverlayEl.addEventListener('touchstart', handleDrawingTouchStart, { passive: false });
+    drawingOverlayEl.addEventListener('touchmove', handleDrawingTouchMove, { passive: false });
+    drawingOverlayEl.addEventListener('pointerdown', handleDrawingPointerDown);
+
+    return () => {
+      drawingOverlayEl.removeEventListener('touchstart', handleDrawingTouchStart);
+      drawingOverlayEl.removeEventListener('touchmove', handleDrawingTouchMove);
+      drawingOverlayEl.removeEventListener('pointerdown', handleDrawingPointerDown);
+    };
+  });
 </script>
 
 {#if appMode === 'login' || currentPath === '/login'}
@@ -1219,29 +1268,10 @@
   </main>
 {/if}
 <!-- Drawing overlay covers entire viewport; only active during drawing mode -->
-<div class="drawing-overlay" class:active={appMode === 'drawing'} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}
-  ontouchstart={(e) => {
-    if (appMode !== 'drawing') return;
-    // Two-finger tap exits draw mode (do not clear)
-    if (e.touches && e.touches.length === 2) {
-      e.preventDefault();
-      exitDrawingMode();
-      uiVisibility.showDuringDraw = false;
-    } else if (e.touches && e.touches.length === 1) {
-      // Resume drawing: hide UI again
-      uiVisibility.showDuringDraw = false;
-    }
-  }}
-  onpointerdown={(e) => {
-    if (appMode !== 'drawing') return;
-    // Any pen press resumes drawing; hide UI
-    if (e.pointerType === 'pen' || e.pointerType === 'mouse' || e.pointerType === 'touch') {
-      uiVisibility.showDuringDraw = false;
-    }
-  }}>
+<div bind:this={drawingOverlayEl} class="drawing-overlay" class:active={appMode === 'drawing'} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}>
   <canvas bind:this={drawingCanvasEl} id="drawing-canvas"></canvas>
   <!-- no controls while drawing; exit with Escape -->
-  <!-- pointer events are enabled only when active via CSS -->
+  <!-- native touch/pointer event listeners added via $effect -->
 </div>
 
 {#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
