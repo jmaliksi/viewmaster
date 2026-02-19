@@ -157,7 +157,8 @@ header:hover > * {
 .logout-btn,
 .stop-btn,
 .resume-btn,
-.new-session-btn {
+.new-session-btn,
+.fit-mode-btn {
   border-radius: var(--border-radius);
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: var(--spacing-sm) 1.2em;
