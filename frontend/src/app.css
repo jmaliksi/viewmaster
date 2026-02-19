@@ -355,6 +355,7 @@ header:hover > * {
   overflow-y: auto;
   padding: var(--spacing-lg);
   padding-top: calc(var(--spacing-lg) + 80px); /* Account for header */
+  container-type: inline-size;
 }
 
 .gallery-grid {
@@ -366,9 +367,8 @@ header:hover > * {
 }
 
 .gallery-item {
-  position: relative;
+  position: relative !important;
   width: 100%;
-  padding-bottom: 100%; /* 1:1 aspect ratio */
   overflow: hidden;
   border-radius: var(--border-radius);
   background-color: rgba(255, 255, 255, 0.05);
@@ -376,12 +376,9 @@ header:hover > * {
 }
 
 .gallery-thumbnail {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  display: block;
   cursor: pointer;
   transition: transform 0.2s, opacity 0.2s;
 }
@@ -392,10 +389,9 @@ header:hover > * {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   pointer-events: none;
   opacity: 0.7;
-  mix-blend-mode: normal;
 }
 
 .start-btn {

@@ -3,6 +3,7 @@
   import Login from './Login.svelte';
   import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
   import { fabric } from 'fabric';
+  import Masonry from 'svelte-bricks';
 
   const IMAGES_STORAGE_KEY = 'viewmaster_images';
   const CHECKED_FOLDERS_STORAGE_KEY = 'viewmaster_checked_folders';
@@ -127,12 +128,19 @@
   let drawingCanvasEl = null;
   let drawingOverlayEl = null;
 
-  // Drawing storage: Map of image URL -> drawing snapshot (data URL)
-  let imageDrawings = $state(new Map());
+  // Drawing storage: object of image URL -> drawing snapshot (data URL)
+  let imageDrawings = $state({});
   let showDrawingsInGallery = $state(true);
 
   // Gallery size control (percentage of smaller viewport dimension)
   let gallerySizePercent = $state(25); // Default 25%, min 15%
+
+  // Window dimensions for reactive calculations
+  let windowWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  // Computed: min column width for masonry based on slider (100-500px range)
+  let galleryMinColWidth = $derived(100 + Math.floor((gallerySizePercent - 15) * 400 / 85));
 
   // Image opacity control (0-100%)
   let imageOpacity = $state(100); // Default 100% opacity
@@ -230,7 +238,7 @@
     const objects = fabricCanvas.getObjects();
     if (objects.length === 0) {
       // No drawing, remove from storage if exists
-      imageDrawings.delete(currentImage.url);
+      delete imageDrawings[currentImage.url];
       return;
     }
 
@@ -239,13 +247,15 @@
     // The browser will scale it appropriately when displayed
     try {
       const dataUrl = fabricCanvas.toDataURL('image/png');
-      imageDrawings.set(currentImage.url, dataUrl);
+      imageDrawings[currentImage.url] = dataUrl;
+      imageDrawings = imageDrawings; // trigger reactivity
     } catch (e) {
       console.error('Error saving drawing:', e);
       // If CORS error, try without crossOrigin
       try {
         const dataUrl = fabricCanvas.toDataURL('image/png');
-        imageDrawings.set(currentImage.url, dataUrl);
+        imageDrawings[currentImage.url] = dataUrl;
+        imageDrawings = imageDrawings; // trigger reactivity
       } catch (e2) {
         console.error('Error saving drawing (retry):', e2);
       }
@@ -278,7 +288,8 @@
     }
     // Remove drawing from storage for current image
     if (currentImage) {
-      imageDrawings.delete(currentImage.url);
+      delete imageDrawings[currentImage.url];
+      imageDrawings = imageDrawings; // trigger reactivity
     }
   }
 
@@ -923,6 +934,13 @@
     window.addEventListener('mousemove', resetMouseTimeout);
     window.addEventListener('mouseenter', resetMouseTimeout);
 
+    // Track window resize
+    const handleResize = () => {
+      windowWidth = window.innerWidth;
+      windowHeight = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
     // Listen for fullscreen changes
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -939,6 +957,7 @@
       window.removeEventListener('popstate', checkRoute);
       window.removeEventListener('mousemove', resetMouseTimeout);
       window.removeEventListener('mouseenter', resetMouseTimeout);
+      window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
@@ -1203,30 +1222,32 @@
           </div>
         </div>
       {:else if appMode === 'stopped'}
-        {@const minDimension = Math.min(window.innerWidth, window.innerHeight)}
-        {@const galleryItemSize = (minDimension * gallerySizePercent) / 100}
         <div class="gallery-container">
-          <div class="gallery-grid" style="--gallery-item-size: {galleryItemSize}px;">
-            {#each imageHistory as image}
-              {@const hasDrawing = imageDrawings.has(image.url) && showDrawingsInGallery}
+          <Masonry 
+            items={imageHistory} 
+            idKey="url"
+            minColWidth={galleryMinColWidth}
+            gap={16}
+          >
+            {#snippet children({ item })}
               <div class="gallery-item">
                 <img
-                  src={image.url}
-                  alt={image.filename}
+                  src={item.url}
+                  alt={item.filename}
                   class="gallery-thumbnail"
                   loading="lazy"
                   style="opacity: {imageOpacity / 100};"
                 />
-                {#if hasDrawing}
+                {#if imageDrawings[item.url] && showDrawingsInGallery}
                   <img
-                    src={imageDrawings.get(image.url)}
+                    src={imageDrawings[item.url]}
                     alt="Drawing overlay"
                     class="gallery-drawing-overlay"
                   />
                 {/if}
               </div>
-            {/each}
-          </div>
+            {/snippet}
+          </Masonry>
         </div>
       {:else if (appMode === 'viewing' || appMode === 'drawing') && currentImage}
         <figure class="image-container">
