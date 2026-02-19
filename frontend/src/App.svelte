@@ -256,6 +256,15 @@
       return;
     }
 
+    // Scale up stroke widths for visibility at thumbnail sizes
+    const STROKE_SCALE = 5;
+    objects.forEach(obj => {
+      if (obj.strokeWidth) {
+        obj.set('strokeWidth', obj.strokeWidth * STROKE_SCALE);
+      }
+    });
+    fabricCanvas.renderAll();
+
     // Calculate display dimensions maintaining aspect ratio (same as object-fit: contain)
     const viewportRatio = viewportWidth / viewportHeight;
     const imgRatio = imgWidth / imgHeight;
@@ -275,16 +284,13 @@
       offsetY = 0;
     }
 
-    // Crop and scale the drawing to the actual image dimensions
-    const multiplier = imgWidth / displayWidth;
-
+    // Crop the drawing to the actual image dimensions
     try {
       const dataUrl = fabricCanvas.toDataURL('image/png', {
         left: offsetX,
         top: offsetY,
         width: displayWidth,
-        height: displayHeight,
-        multiplier: multiplier
+        height: displayHeight
       });
       imageDrawings[currentImage.url] = { 
         dataUrl, 
@@ -299,8 +305,7 @@
           left: offsetX,
           top: offsetY,
           width: displayWidth,
-          height: displayHeight,
-          multiplier: multiplier
+          height: displayHeight
         });
         imageDrawings[currentImage.url] = { 
           dataUrl, 
@@ -311,6 +316,14 @@
       } catch (e2) {
         console.error('Error saving drawing (retry):', e2);
       }
+    } finally {
+      // Restore original stroke widths after saving
+      objects.forEach(obj => {
+        if (obj.strokeWidth) {
+          obj.set('strokeWidth', obj.strokeWidth / STROKE_SCALE);
+        }
+      });
+      fabricCanvas.renderAll();
     }
   }
 
