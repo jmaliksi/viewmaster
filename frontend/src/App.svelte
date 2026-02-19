@@ -128,7 +128,10 @@
   let drawingCanvasEl = null;
   let drawingOverlayEl = null;
 
-  // Drawing storage: object of image URL -> drawing snapshot (data URL)
+  // Current image dimensions for drawing export
+  let currentImageDimensions = $state({ width: 0, height: 0 });
+
+  // Drawing storage: object of image URL -> { dataUrl, width, height }
   let imageDrawings = $state({});
   let showDrawingsInGallery = $state(true);
 
@@ -242,24 +245,88 @@
       return;
     }
 
-    // Save the canvas as a data URL
-    // The canvas is fullscreen, but we'll overlay it on thumbnails in gallery
-    // The browser will scale it appropriately when displayed
+    // Calculate how the image is displayed within the viewport (object-fit: contain)
+    const viewportWidth = fabricCanvas.getWidth();
+    const viewportHeight = fabricCanvas.getHeight();
+    const imgWidth = currentImageDimensions.width;
+    const imgHeight = currentImageDimensions.height;
+
+    if (imgWidth === 0 || imgHeight === 0) {
+      console.error('Cannot save drawing: image dimensions unknown');
+      return;
+    }
+
+    // Calculate display dimensions maintaining aspect ratio (same as object-fit: contain)
+    const viewportRatio = viewportWidth / viewportHeight;
+    const imgRatio = imgWidth / imgHeight;
+
+    let displayWidth, displayHeight, offsetX, offsetY;
+    if (imgRatio > viewportRatio) {
+      // Image is wider - constrained by width
+      displayWidth = viewportWidth;
+      displayHeight = viewportWidth / imgRatio;
+      offsetX = 0;
+      offsetY = (viewportHeight - displayHeight) / 2;
+    } else {
+      // Image is taller - constrained by height
+      displayHeight = viewportHeight;
+      displayWidth = viewportHeight * imgRatio;
+      offsetX = (viewportWidth - displayWidth) / 2;
+      offsetY = 0;
+    }
+
+    // Crop and scale the drawing to the actual image dimensions
+    const multiplier = imgWidth / displayWidth;
+
     try {
-      const dataUrl = fabricCanvas.toDataURL('image/png');
-      imageDrawings[currentImage.url] = dataUrl;
+      const dataUrl = fabricCanvas.toDataURL('image/png', {
+        left: offsetX,
+        top: offsetY,
+        width: displayWidth,
+        height: displayHeight,
+        multiplier: multiplier
+      });
+      imageDrawings[currentImage.url] = { 
+        dataUrl, 
+        width: imgWidth, 
+        height: imgHeight 
+      };
       imageDrawings = imageDrawings; // trigger reactivity
     } catch (e) {
       console.error('Error saving drawing:', e);
-      // If CORS error, try without crossOrigin
       try {
-        const dataUrl = fabricCanvas.toDataURL('image/png');
-        imageDrawings[currentImage.url] = dataUrl;
+        const dataUrl = fabricCanvas.toDataURL('image/png', {
+          left: offsetX,
+          top: offsetY,
+          width: displayWidth,
+          height: displayHeight,
+          multiplier: multiplier
+        });
+        imageDrawings[currentImage.url] = { 
+          dataUrl, 
+          width: imgWidth, 
+          height: imgHeight 
+        };
         imageDrawings = imageDrawings; // trigger reactivity
       } catch (e2) {
         console.error('Error saving drawing (retry):', e2);
       }
     }
+  }
+
+  async function loadImageDimensions(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        currentImageDimensions = { width: img.naturalWidth, height: img.naturalHeight };
+        resolve();
+      };
+      img.onerror = () => {
+        currentImageDimensions = { width: 0, height: 0 };
+        resolve();
+      };
+      img.src = url;
+    });
   }
 
   function exitDrawingMode() {
@@ -970,6 +1037,13 @@
     };
   });
 
+  // Load image dimensions when current image changes
+  $effect(() => {
+    if (currentImage?.url) {
+      loadImageDimensions(currentImage.url);
+    }
+  });
+
   // Set up native touch/pointer event listeners on drawing overlay
   // Using { passive: false } to allow preventDefault() to block pull-to-refresh
   $effect(() => {
@@ -1239,8 +1313,9 @@
                   style="opacity: {imageOpacity / 100};"
                 />
                 {#if imageDrawings[item.url] && showDrawingsInGallery}
+                  {@const drawing = imageDrawings[item.url]}
                   <img
-                    src={imageDrawings[item.url]}
+                    src={drawing.dataUrl}
                     alt="Drawing overlay"
                     class="gallery-drawing-overlay"
                   />
