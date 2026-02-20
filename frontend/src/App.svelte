@@ -297,27 +297,12 @@
       imageDrawings[currentImage.url] = { 
         dataUrl, 
         width: imgWidth, 
-        height: imgHeight 
+        height: imgHeight,
+        fitMode: imageFitMode
       };
       imageDrawings = imageDrawings; // trigger reactivity
     } catch (e) {
       console.error('Error saving drawing:', e);
-      try {
-        const dataUrl = fabricCanvas.toDataURL('image/png', {
-          left: offsetX,
-          top: offsetY,
-          width: displayWidth,
-          height: displayHeight
-        });
-        imageDrawings[currentImage.url] = { 
-          dataUrl, 
-          width: imgWidth, 
-          height: imgHeight 
-        };
-        imageDrawings = imageDrawings; // trigger reactivity
-      } catch (e2) {
-        console.error('Error saving drawing (retry):', e2);
-      }
     } finally {
       // Restore original stroke widths after saving
       objects.forEach(obj => {
@@ -1386,6 +1371,7 @@
                     src={drawing.dataUrl}
                     alt="Drawing overlay"
                     class="gallery-drawing-overlay"
+                    style="object-fit: {drawing.fitMode === 'fill' ? 'contain' : 'cover'};"
                   />
                 {/if}
               </div>
