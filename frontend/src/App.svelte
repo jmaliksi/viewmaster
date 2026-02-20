@@ -5,7 +5,6 @@
   import { fabric } from 'fabric';
   import Masonry from 'svelte-bricks';
 
-  const IMAGES_STORAGE_KEY = 'viewmaster_images';
   const CHECKED_FOLDERS_STORAGE_KEY = 'viewmaster_checked_folders';
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
@@ -86,27 +85,8 @@
   let showTimerBar = $derived(timer.playing && currentImage !== null && (!uiVisibility.mouseActive || appMode === 'drawing'));
 
   // Computed: filtered images based on checked folders and aspect ratios
-  let filteredImages = $derived.by(() => {
-    if (!images || !images.images || images.images.length === 0) return [];
-
-    return images.images.filter(img => {
-      // Always include root images (no parent folder)
-      const pathParts = (img.path || img.relative_path || '').split('/');
-      if (pathParts.length <= 1) {
-        return true; // Root image, always include
-      }
-
-      // Get immediate parent folder
-      const parentFolder = pathParts[pathParts.length - 2];
-      if (!checkedFolders.has(parentFolder)) return false;
-
-      // Aspect ratio filter
-      const aspectRatio = img.aspect_ratio || 'unknown';
-      if (!checkedAspectRatios.has(aspectRatio)) return false;
-
-      return true;
-    });
-  });
+  // Only calculated once when user presses Start, not on every checkbox toggle
+  let filteredImages = $state(null);
 
   // Computed: aspect ratio image counts from full image list
   let aspectRatioImageCounts = $derived.by(() => {
@@ -531,9 +511,6 @@
       newChecked.add(folder);
     }
     checkedFolders = newChecked;
-    // Clear preloaded random images buffer when folder selection changes
-    shuffledFolders = [];
-    initializeImagePlaylist();
   }
 
   function toggleAllFolders() {
@@ -552,8 +529,6 @@
       visibleFolders.forEach(folder => newChecked.add(folder));
     }
     checkedFolders = newChecked;
-    shuffledFolders = [];
-    initializeImagePlaylist();
   }
 
   function toggleAspectRatio(ratio) {
@@ -564,8 +539,6 @@
       newChecked.add(ratio);
     }
     checkedAspectRatios = newChecked;
-    shuffledFolders = [];
-    initializeImagePlaylist();
   }
 
   function toggleAllAspectRatios() {
@@ -580,8 +553,6 @@
       visibleRatios.forEach(ratio => newChecked.add(ratio));
     }
     checkedAspectRatios = newChecked;
-    shuffledFolders = [];
-    initializeImagePlaylist();
   }
 
   function getAspectRatioIcon(ratio) {
@@ -614,7 +585,27 @@
   }
 
   function initializeImagePlaylist() {
-    const filtered = filteredImages;
+    // Filter images based on current checked folders and aspect ratios
+    // This only runs once when user presses Start, not on every checkbox toggle
+    const filtered = images.images.filter(img => {
+      // Always include root images (no parent folder)
+      const pathParts = (img.path || img.relative_path || '').split('/');
+      if (pathParts.length <= 1) {
+        return true;
+      }
+
+      // Get immediate parent folder
+      const parentFolder = pathParts[pathParts.length - 2];
+      if (!checkedFolders.has(parentFolder)) return false;
+
+      // Aspect ratio filter
+      const aspectRatio = img.aspect_ratio || 'unknown';
+      if (!checkedAspectRatios.has(aspectRatio)) return false;
+
+      return true;
+    });
+
+    shuffledFolders = [];
     if (!filtered || filtered.length === 0) {
       imagePlaylist = [];
       playlistIndex = 0;
@@ -697,6 +688,7 @@
   function goToNextImage() {
     if (appMode === 'start') {
       appMode = 'viewing';
+      initializeImagePlaylist();
     }
     if (fabricCanvas && currentImage) {
       saveCurrentDrawing();
@@ -795,7 +787,6 @@
 
     // Clear auth cache and images
     clearAuthCache();
-    localStorage.removeItem(IMAGES_STORAGE_KEY);
     localStorage.removeItem(CHECKED_FOLDERS_STORAGE_KEY);
     images = null;
     currentImage = null;
