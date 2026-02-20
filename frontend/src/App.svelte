@@ -79,7 +79,6 @@
   let availableAspectRatios = $state([]);
   let checkedAspectRatios = $state(new Set());
   let aspectRatioDropdownOpen = $state(false);
-  let aspectRatioFilterText = $state('');
 
   // Consolidated timer state
   let timer = $state({
@@ -1320,13 +1319,6 @@
                 </button>
                 {#if aspectRatioDropdownOpen}
                   <div class="folder-checkboxes">
-                    <input
-                      type="text"
-                      placeholder="Filter by ratio..."
-                      bind:value={aspectRatioFilterText}
-                      class="folder-filter-input"
-                      onclick={(e) => e.stopPropagation()}
-                    />
                     <label class="folder-checkbox-item folder-checkbox-select-all">
                       <input
                         type="checkbox"
@@ -1342,7 +1334,7 @@
                       />
                       <span>Select All</span>
                     </label>
-                    {#each availableAspectRatios.filter(r => !aspectRatioFilterText || r.toLowerCase().includes(aspectRatioFilterText.toLowerCase())) as ratio}
+                    {#each availableAspectRatios as ratio}
                       {@const icon = getAspectRatioIcon(ratio)}
                       {@const count = aspectRatioImageCounts[ratio] || 0}
                       <label class="folder-checkbox-item">
