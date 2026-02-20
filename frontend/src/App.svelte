@@ -5,7 +5,7 @@
   import { fabric } from 'fabric';
   import Masonry from 'svelte-bricks';
 
-  const CHECKED_FOLDERS_STORAGE_KEY = 'viewmaster_checked_folders';
+  const SETTINGS_STORAGE_KEY = 'viewmaster_settings';
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
 
@@ -28,6 +28,29 @@
     }
 
     return array;
+  }
+
+  function saveSettings() {
+    const settings = {
+      checkedFolders: Array.from(checkedFolders),
+      checkedAspectRatios: Array.from(checkedAspectRatios),
+      timerDuration: timer.duration,
+      imageFitMode: imageFitMode,
+      imageOpacity: imageOpacity,
+      gallerySizePercent: gallerySizePercent
+    };
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  }
+
+  function loadSettings() {
+    try {
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!stored) return null;
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error loading settings:', e);
+      return null;
+    }
   }
 
   // Main app mode state machine
@@ -501,6 +524,39 @@
     // Extract available aspect ratios from the data
     availableAspectRatios = Array.from(aspectRatios).sort();
     checkedAspectRatios = new Set(availableAspectRatios);
+
+    // Load and apply saved settings
+    const saved = loadSettings();
+    if (saved) {
+      // Apply saved folders that still exist
+      if (saved.checkedFolders && Array.isArray(saved.checkedFolders)) {
+        const validSavedFolders = saved.checkedFolders.filter(f => availableFolders.includes(f));
+        if (validSavedFolders.length > 0) {
+          checkedFolders = new Set(validSavedFolders);
+        }
+      }
+      // Apply saved aspect ratios that still exist
+      if (saved.checkedAspectRatios && Array.isArray(saved.checkedAspectRatios)) {
+        const validSavedRatios = saved.checkedAspectRatios.filter(r => availableAspectRatios.includes(r));
+        if (validSavedRatios.length > 0) {
+          checkedAspectRatios = new Set(validSavedRatios);
+        }
+      }
+      if (saved.timerDuration && saved.timerDuration > 0) {
+        timer.duration = saved.timerDuration;
+        timer.remaining = saved.timerDuration;
+        timer.inputValue = saved.timerDuration.toString();
+      }
+      if (saved.imageFitMode) {
+        imageFitMode = saved.imageFitMode;
+      }
+      if (saved.imageOpacity !== undefined) {
+        imageOpacity = saved.imageOpacity;
+      }
+      if (saved.gallerySizePercent !== undefined) {
+        gallerySizePercent = saved.gallerySizePercent;
+      }
+    }
   }
 
   function toggleFolder(folder) {
@@ -787,7 +843,7 @@
 
     // Clear auth cache and images
     clearAuthCache();
-    localStorage.removeItem(CHECKED_FOLDERS_STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
     images = null;
     currentImage = null;
     imageHistory = [];
@@ -1045,6 +1101,22 @@
   $effect(() => {
     if (currentImage?.url) {
       loadImageDimensions(currentImage.url);
+    }
+  });
+
+  // Auto-save settings when any of these change
+  $effect(() => {
+    // Track these specific values
+    const _folders = Array.from(checkedFolders);
+    const _ratios = Array.from(checkedAspectRatios);
+    const _timer = timer.duration;
+    const _fit = imageFitMode;
+    const _opacity = imageOpacity;
+    const _gallery = gallerySizePercent;
+
+    // Only save after initial load
+    if (availableFolders.length > 0 || availableAspectRatios.length > 0) {
+      saveSettings();
     }
   });
 
