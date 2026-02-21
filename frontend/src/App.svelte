@@ -183,34 +183,6 @@
         allowTouchScrolling: false
       });
 
-      // Triple-click gestures in drawing mode
-      fabricCanvas.on('mouse:tripleclick', (options) => {
-        if (appMode !== 'drawing') return;
-
-        const pointer = fabricCanvas.getViewportPoint(options.e);
-        const x = pointer.x;
-        const y = pointer.y;
-        const width = fabricCanvas.getWidth();
-        const height = fabricCanvas.getHeight();
-
-        // Top 20% or Bottom 20% = exit draw mode
-        if (y < height * 0.2 || y > height * 0.8) {
-          exitDrawingMode();
-          uiVisibility.showDuringDraw = false;
-          return;
-        }
-
-        // Left 20% = previous image
-        if (x < width * 0.2) {
-          goToPreviousImage();
-          return;
-        }
-
-        // Right 20% = next image
-        if (x > width * 0.8) {
-          goToNextImage();
-        }
-      });
     }
     fabricCanvas.isDrawingMode = true;
     if (fabricCanvas.freeDrawingBrush) {
@@ -223,12 +195,61 @@
     fabricCanvas.renderAll();
   }
 
+  // Track two-finger tap for zone-based actions
+  let twoFingerTouches = null;
+  let twoFingerTapStart = 0;
+
   function handleDrawingTouchStart(e) {
     if (appMode !== 'drawing') return;
     
     // Single finger: hide UI
     if (e.touches && e.touches.length === 1) {
       uiVisibility.showDuringDraw = false;
+      twoFingerTouches = null;
+    }
+    
+    // Two-finger: track positions for zone detection
+    if (e.touches && e.touches.length === 2) {
+      twoFingerTouches = [
+        { x: e.touches[0].clientX, y: e.touches[0].clientY },
+        { x: e.touches[1].clientX, y: e.touches[1].clientY }
+      ];
+      twoFingerTapStart = Date.now();
+    }
+  }
+
+  function handleDrawingTouchEnd(e) {
+    if (appMode !== 'drawing') return;
+    
+    // Check for two-finger tap (quick tap with 2 fingers)
+    if (twoFingerTouches && e.changedTouches && e.changedTouches.length === 2) {
+      const tapDuration = Date.now() - twoFingerTapStart;
+      
+      // Quick tap (< 400ms) triggers zone action
+      if (tapDuration < 400) {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Use midpoint of the two touches
+        const midX = (twoFingerTouches[0].x + twoFingerTouches[1].x) / 2;
+        const midY = (twoFingerTouches[0].y + twoFingerTouches[1].y) / 2;
+
+        // Top 20% or Bottom 20% = exit draw mode
+        if (midY < height * 0.2 || midY > height * 0.8) {
+          exitDrawingMode();
+          uiVisibility.showDuringDraw = false;
+        }
+        // Left 20% = previous image
+        else if (midX < width * 0.2) {
+          goToPreviousImage();
+        }
+        // Right 20% = next image
+        else if (midX > width * 0.8) {
+          goToNextImage();
+        }
+      }
+      
+      twoFingerTouches = null;
     }
   }
 
@@ -753,6 +774,8 @@
     if (appMode === 'start') {
       appMode = 'viewing';
       initializeImagePlaylist();
+      timer.playing = true;
+      startTimer();
     }
     if (fabricCanvas && currentImage) {
       saveCurrentDrawing();
@@ -1150,11 +1173,13 @@
 
     drawingOverlayEl.addEventListener('touchstart', handleDrawingTouchStart, { passive: false });
     drawingOverlayEl.addEventListener('touchmove', handleDrawingTouchMove, { passive: false });
+    drawingOverlayEl.addEventListener('touchend', handleDrawingTouchEnd, { passive: false });
     drawingOverlayEl.addEventListener('pointerdown', handleDrawingPointerDown);
 
     return () => {
       drawingOverlayEl.removeEventListener('touchstart', handleDrawingTouchStart);
       drawingOverlayEl.removeEventListener('touchmove', handleDrawingTouchMove);
+      drawingOverlayEl.removeEventListener('touchend', handleDrawingTouchEnd);
       drawingOverlayEl.removeEventListener('pointerdown', handleDrawingPointerDown);
     };
   });
@@ -1483,9 +1508,7 @@
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions" style="display: flex; width: 100%; align-items: center;">
       <div class="image-info" style="margin-right: auto; padding-left: 1rem; font-family: monospace; color: #ccc; word-break: break-all;">
-        {#if !timer.playing}
-          {currentImageInfo}
-        {/if}
+        {currentImageInfo}
       </div>
       <label class="opacity-slider-label">
         <span>Opacity:</span>
