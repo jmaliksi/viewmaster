@@ -182,6 +182,35 @@
         selection: false,
         allowTouchScrolling: false
       });
+
+      // Triple-click gestures in drawing mode
+      fabricCanvas.on('mouse:tripleclick', (options) => {
+        if (appMode !== 'drawing') return;
+
+        const pointer = fabricCanvas.getViewportPoint(options.e);
+        const x = pointer.x;
+        const y = pointer.y;
+        const width = fabricCanvas.getWidth();
+        const height = fabricCanvas.getHeight();
+
+        // Top 20% or Bottom 20% = exit draw mode
+        if (y < height * 0.2 || y > height * 0.8) {
+          exitDrawingMode();
+          uiVisibility.showDuringDraw = false;
+          return;
+        }
+
+        // Left 20% = previous image
+        if (x < width * 0.2) {
+          goToPreviousImage();
+          return;
+        }
+
+        // Right 20% = next image
+        if (x > width * 0.8) {
+          goToNextImage();
+        }
+      });
     }
     fabricCanvas.isDrawingMode = true;
     if (fabricCanvas.freeDrawingBrush) {
@@ -197,13 +226,8 @@
   function handleDrawingTouchStart(e) {
     if (appMode !== 'drawing') return;
     
-    // Two-finger tap exits draw mode (do not clear)
-    if (e.touches && e.touches.length === 2) {
-      e.preventDefault();
-      exitDrawingMode();
-      uiVisibility.showDuringDraw = false;
-    } else if (e.touches && e.touches.length === 1) {
-      // Resume drawing: hide UI again
+    // Single finger: hide UI
+    if (e.touches && e.touches.length === 1) {
       uiVisibility.showDuringDraw = false;
     }
   }
