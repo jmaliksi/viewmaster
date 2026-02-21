@@ -838,6 +838,21 @@
     preloadAdjacentImages();
   }
 
+  function openFromGallery(image) {
+    const imageFromList = images?.images?.find(img => img.url === image.url) || image;
+    const historyPosition = imageHistory.findIndex(img => img.url === imageFromList.url);
+    
+    if (historyPosition !== -1) {
+      imagePlaylist = [...imageHistory];
+      playlistIndex = historyPosition;
+      historyIndex = historyPosition;
+    }
+    currentImage = imageFromList;
+    appMode = 'viewing';
+    timer.playing = false;
+    stopTimer();
+  }
+
   async function handleLogout() {
     try {
       // Call logout endpoint to clear cookie
@@ -1173,6 +1188,7 @@
             {#if timer.editing && !timer.playing}
               <input
                 type="number"
+                inputmode="numeric"
                 class="timer-input"
                 value={timer.inputValue}
                 min="1"
@@ -1381,7 +1397,13 @@
             gap={16}
           >
             {#snippet children({ item })}
-              <div class="gallery-item">
+              <div 
+                class="gallery-item" 
+                onclick={() => openFromGallery(item)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') openFromGallery(item); }}
+                role="button"
+                tabindex="0"
+              >
                 <img
                   src={item.url}
                   alt={item.filename}
@@ -1423,6 +1445,15 @@
             class:fill-mode={imageFitMode === 'fill'}
             style="opacity: {imageOpacity / 100}; object-fit: {imageFitMode === 'fill' ? 'cover' : 'contain'};"
           />
+          {#if imageDrawings[currentImage.url]}
+            {@const drawing = imageDrawings[currentImage.url]}
+            <img
+              src={drawing.dataUrl}
+              alt="Drawing overlay"
+              class="drawing-view-overlay"
+              style="object-fit: {drawing.fitMode === 'fill' ? 'cover' : 'contain'};"
+            />
+          {/if}
           <button
             class="arrow-btn right-arrow"
             class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
@@ -1451,7 +1482,7 @@
 {#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions" style="display: flex; width: 100%; align-items: center;">
-      <div class="image-info" style="margin-right: auto; padding-left: 1rem; font-family: monospace; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <div class="image-info" style="margin-right: auto; padding-left: 1rem; font-family: monospace; color: #ccc; word-break: break-all;">
         {#if !timer.playing}
           {currentImageInfo}
         {/if}
@@ -1537,12 +1568,35 @@
     width: 100%;
     height: 100%;
     margin: 0; /* for figure */
+    position: relative;
   }
 
   .display-image {
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  .drawing-view-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .gallery-item {
+    position: relative;
+  }
+
+  .gallery-drawing-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
   }
 
   .folder-filter-input {
