@@ -321,7 +321,7 @@ async def serve_image(
             status_code=304,
             headers={
                 "ETag": etag,
-                "Cache-Control": "public, max-age=31536000, immutable",
+"Cache-Control": "public, max-age=600",
             }
         )
 
