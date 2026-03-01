@@ -8,6 +8,13 @@
   const SETTINGS_STORAGE_KEY = 'viewmaster_settings';
   const MAX_HISTORY_SIZE = 50;
   const MOUSE_INACTIVITY_TIMEOUT = 2000; // 2 seconds
+  const CACHE_BUST_VERSION = '1';
+
+  function cacheBust(url) {
+    if (!url) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}cb=${CACHE_BUST_VERSION}`;
+  }
 
   /**
    * Shuffles an array in-place using the Fisher-Yates algorithm.
@@ -370,7 +377,7 @@
         currentImageDimensions = { width: 0, height: 0 };
         resolve();
       };
-      img.src = url;
+      img.src = cacheBust(url);
     });
   }
 
@@ -1024,7 +1031,7 @@
   // Image preloading functions
   function preloadImage(url) {
     const img = new Image();
-    img.src = url;
+    img.src = cacheBust(url);
   }
 
   function preloadAdjacentImages() {
@@ -1338,7 +1345,7 @@
                       <label class="folder-checkbox-item">
                         {#if thumbnailUrl}
                           <img
-                            src={thumbnailUrl}
+                            src={cacheBust(thumbnailUrl)}
                             alt=""
                             class="folder-thumbnail"
                             loading="lazy"
@@ -1430,7 +1437,7 @@
                 tabindex="0"
               >
                 <img
-                  src={item.url}
+                  src={cacheBust(item.url)}
                   alt={item.filename}
                   class="gallery-thumbnail"
                   loading="lazy"
@@ -1464,7 +1471,7 @@
             ←
           </button>
           <img
-            src={currentImage.url}
+            src={cacheBust(currentImage.url)}
             alt={currentImage.filename}
             class="display-image"
             class:fill-mode={imageFitMode === 'fill'}
