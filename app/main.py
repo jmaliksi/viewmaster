@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import api
+from app.cache import init_manifest, get_images_directory
 
 app = FastAPI(
     title="ViewMaster API",
@@ -18,6 +19,22 @@ app = FastAPI(
     redoc_url=None,  # Disable ReDoc
     openapi_url=None,  # Disable OpenAPI schema endpoint
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Generate manifest.json on server startup if needed"""
+    try:
+        from app.cache import is_cache_valid, load_manifest
+
+        images_dir = get_images_directory()
+        if images_dir.exists() and images_dir.is_dir():
+            # Try to load existing manifest
+            load_manifest()
+            # If cache is invalid (or no manifest), generate it
+            if not is_cache_valid(images_dir):
+                init_manifest(images_dir)
+    except Exception as e:
+        print(f"Warning: Failed to generate manifest on startup: {e}")
 
 # Configure CORS
 app.add_middleware(
