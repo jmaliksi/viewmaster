@@ -58,8 +58,8 @@
       fabricCanvas.freeDrawingBrush.color = DRAW_COLOR
       fabricCanvas.freeDrawingBrush.width = DRAW_WIDTH
     }
-    fabricCanvas.setWidth(window.innerWidth)
-    fabricCanvas.setHeight(window.innerHeight)
+    fabricCanvas.setWidth(document.documentElement.clientWidth)
+    fabricCanvas.setHeight(document.documentElement.clientHeight)
     fabricCanvas.renderAll()
   }
 
@@ -179,7 +179,6 @@
     }
     prevImageUrl = newImg.url
     myImage = newImg
-    isDrawing = false
     loadImageDimensions(newImg.url)
   })
 
@@ -311,8 +310,9 @@
   class:active={isDrawing}
   role="presentation"
   aria-hidden="true"
+  style="width: 100vw; height: 100vh; overflow: hidden;"
 >
-  <canvas bind:this={drawingCanvasEl}></canvas>
+  <canvas bind:this={drawingCanvasEl} style="display: block;"></canvas>
 </div>
 
 <style>
