@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import api
+from app.routers import sync as sync_router
 from app.cache import init_manifest, get_images_directory
 
 app = FastAPI(
@@ -50,6 +51,9 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API router
 app.include_router(api.router)
+
+# Include sync WebSocket router
+app.include_router(sync_router.router)
 
 # Images are now served through authenticated endpoints in the API router
 

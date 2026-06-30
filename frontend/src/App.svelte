@@ -4,6 +4,9 @@
   import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
   import { fabric } from 'fabric';
   import Masonry from 'svelte-bricks';
+  import SyncHost from './SyncHost.svelte';
+  import SyncClient from './SyncClient.svelte';
+  import { syncState, sendState } from './sync.svelte.js';
 
   const SETTINGS_STORAGE_KEY = 'viewmaster_settings';
   const MAX_HISTORY_SIZE = 50;
@@ -481,6 +484,12 @@
       currentPath = '/';
       // Load images after authentication
       await loadImages();
+      return;
+    }
+
+    // If authenticated and on sync page, just render SyncClient (no image loading)
+    if (authStatus && currentPath === '/sync') {
+      appMode = 'sync';
       return;
     }
 
@@ -1173,6 +1182,21 @@
     }
   });
 
+  // Send state updates to synced clients whenever currentImage changes
+  $effect(() => {
+    const active = syncState.sessionActive;
+    const img = currentImage;
+    if (syncState.role === 'host' && active && img) {
+      sendState({
+        currentImage: {
+          url: img.url,
+          filename: img.filename,
+          path: img.path || img.relative_path || '',
+        },
+      });
+    }
+  });
+
   // Set up native touch/pointer event listeners on drawing overlay
   // Using { passive: false } to allow preventDefault() to block pull-to-refresh
   $effect(() => {
@@ -1192,7 +1216,9 @@
   });
 </script>
 
-{#if appMode === 'login' || currentPath === '/login'}
+{#if currentPath === '/sync'}
+  <SyncClient />
+{:else if appMode === 'login' || currentPath === '/login'}
   <Login />
 {:else}
   <main onmouseenter={resetMouseTimeout} onmousemove={resetMouseTimeout}>
@@ -1420,7 +1446,7 @@
             {/if}
           </div>
         </div>
-      {:else if appMode === 'stopped'}
+{:else if currentPath !== '/sync' && appMode === 'stopped'}
         <div class="gallery-container">
           <Masonry 
             items={imageHistory} 
@@ -1505,13 +1531,15 @@
   </main>
 {/if}
 <!-- Drawing overlay covers entire viewport; only active during drawing mode -->
+{#if currentPath !== '/sync'}
 <div bind:this={drawingOverlayEl} class="drawing-overlay" class:active={appMode === 'drawing'} role="presentation" aria-hidden="true" onmousemove={resetMouseTimeout} onmouseenter={resetMouseTimeout}>
   <canvas bind:this={drawingCanvasEl} id="drawing-canvas"></canvas>
   <!-- no controls while drawing; exit with Escape -->
   <!-- native touch/pointer event listeners added via $effect -->
 </div>
+{/if}
 
-{#if appMode !== 'login' && currentPath !== '/login' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
+{#if appMode !== 'login' && currentPath !== '/login' && currentPath !== '/sync' && appMode !== 'stopped' && (appMode !== 'drawing' || uiVisibility.showDuringDraw)}
   <footer class:inactive={!uiVisibility.mouseActive} class="bottom-bar">
     <div class="bottom-actions" style="display: flex; width: 100%; align-items: center;">
       <div class="image-info" style="margin-right: auto; padding-left: 1rem; font-family: monospace; color: #ccc; word-break: break-all;">
@@ -1543,6 +1571,7 @@
         aria-label="Clear drawing"
         disabled={!images || !images.images || images.images.length === 0}
       >Clear</button>
+      <SyncHost />
     </div>
   </footer>
 {:else if appMode === 'stopped'}
@@ -1582,6 +1611,7 @@
       >
         {showDrawingsInGallery ? '👁️ Hide Drawings' : '👁️‍🗨️ Show Drawings'}
       </button>
+      <SyncHost />
     </div>
   </footer>
 {/if}
