@@ -184,6 +184,14 @@
   })
 
   $effect(() => {
+    const nextImg = syncState.nextImage
+    if (nextImg) {
+      const img = new Image()
+      img.src = cacheBust(nextImg.url)
+    }
+  })
+
+  $effect(() => {
     if (userDisconnected) { appMode = 'disconnected'; return }
     const state = syncState.wsState
     const waiting = syncState.waitingForHost

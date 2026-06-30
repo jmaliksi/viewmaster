@@ -1187,12 +1187,19 @@
     const active = syncState.sessionActive;
     const img = currentImage;
     if (syncState.role === 'host' && active && img) {
+      const nextIdx = playlistIndex;
+      const nextImg = (imagePlaylist && nextIdx < imagePlaylist.length) ? imagePlaylist[nextIdx] : null;
       sendState({
         currentImage: {
           url: img.url,
           filename: img.filename,
           path: img.path || img.relative_path || '',
         },
+        nextImage: nextImg ? {
+          url: nextImg.url,
+          filename: nextImg.filename,
+          path: nextImg.path || nextImg.relative_path || '',
+        } : null,
       });
     }
   });

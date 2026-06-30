@@ -6,6 +6,7 @@ export const syncState = $state({
   waitingForHost: false,
   sessionEnded: false,
   currentImage: null,
+  nextImage: null,
 })
 
 let ws = null
@@ -110,6 +111,7 @@ function applyState(state) {
   if (state.currentImage) {
     syncState.currentImage = state.currentImage
   }
+  syncState.nextImage = state.nextImage ?? null
 }
 
 export function registerHost() {
