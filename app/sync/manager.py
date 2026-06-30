@@ -15,9 +15,7 @@ class SyncManager:
         self.session: SyncSession | None = None
 
     def register_host(self, ws: WebSocket) -> bool:
-        if self.session and self.session.host is not None and self.session.host is not ws:
-            if self.session.host.client_state.value == 1:
-                return False
+        # Last host to register wins; overwrite any existing host
         if self.session is None:
             self.session = SyncSession()
         self.session.host = ws
@@ -41,6 +39,8 @@ class SyncManager:
         if self.session.host is ws:
             was_host = True
             self.session.host = None
+            # Clear stale state so a reconnected host starts fresh
+            self.session.state = None
         else:
             was_host = False
             if ws in self.session.clients:
