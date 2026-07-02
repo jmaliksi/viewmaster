@@ -22,6 +22,8 @@
   let drawingOverlayEl = null
   let uiVisible = $state(true)
   let mouseTimeout = null
+  let twoFingerTouches = null
+  let twoFingerTapStart = 0
 
   function cacheBust(url) {
     if (!url) return url
@@ -206,6 +208,14 @@
   function handleDrawingTouchStart(e) {
     if (!isDrawing) return
     if (e.touches && e.touches.length === 1) uiVisible = false
+    // Track two-finger positions for tap detection
+    if (e.touches && e.touches.length === 2) {
+      twoFingerTouches = [
+        { x: e.touches[0].clientX, y: e.touches[0].clientY },
+        { x: e.touches[1].clientX, y: e.touches[1].clientY }
+      ]
+      twoFingerTapStart = Date.now()
+    }
   }
   function handleDrawingTouchMove(e) {
     if (!isDrawing) return
@@ -213,10 +223,14 @@
   }
   function handleDrawingTouchEnd(e) {
     if (!isDrawing) return
-    if (e.touches && e.touches.length === 2) {
-      const midY = (e.changedTouches[0].clientY + e.changedTouches[1].clientY) / 2
-      const height = window.innerHeight
-      if (midY < height * 0.2 || midY > height * 0.8) exitDrawingMode()
+    if (twoFingerTouches && e.changedTouches && e.changedTouches.length === 2) {
+      const tapDuration = Date.now() - twoFingerTapStart
+      if (tapDuration < 400) {
+        const height = window.innerHeight
+        const midY = (twoFingerTouches[0].y + twoFingerTouches[1].y) / 2
+        if (midY < height * 0.2 || midY > height * 0.8) exitDrawingMode()
+      }
+      twoFingerTouches = null
     }
   }
   function handleDrawingPointerDown(e) {
