@@ -530,6 +530,36 @@
     }
   }
 
+  async function handleRefresh() {
+    try {
+      const response = await fetch('/api/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`Refresh failed: ${response.statusText}`);
+      const data = await response.json();
+      images = data;
+      extractFolders();
+    } catch (err) {
+      console.error('Error refreshing manifest:', err);
+    }
+  }
+
+  async function handleRegenerate() {
+    try {
+      const response = await fetch('/api/regenerate', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`Regenerate failed: ${response.statusText}`);
+      const data = await response.json();
+      images = data;
+      extractFolders();
+    } catch (err) {
+      console.error('Error regenerating manifest:', err);
+    }
+  }
+
   function extractFolders() {
     if (!images || !images.images || images.images.length === 0) {
       availableFolders = [];
@@ -1451,6 +1481,14 @@
                 {/if}
               </div>
             {/if}
+            <div class="manifest-actions">
+              <button class="refresh-btn" onclick={handleRefresh}>
+                ⟳ Refresh
+              </button>
+              <button class="regenerate-btn" onclick={handleRegenerate}>
+                🔄 Regenerate from Scratch
+              </button>
+            </div>
           </div>
         </div>
 {:else if currentPath !== '/sync' && appMode === 'stopped'}

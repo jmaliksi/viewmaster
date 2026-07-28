@@ -18,7 +18,7 @@ from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     BEARER_TOKEN_COOKIE_NAME,
 )
-from app.cache import get_cached_images, is_cache_valid, init_manifest, load_manifest, MANIFEST_PATH, get_images_directory
+from app.cache import get_cached_images, sync_manifest, regenerate_manifest, load_manifest, MANIFEST_PATH, get_images_directory
 
 router = APIRouter(prefix="/api", tags=["api"])
 security = HTTPBearer()
@@ -117,8 +117,8 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 @router.get("/load")
 async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
-    Return an index of all images from the manifest.
-    The manifest is generated at server startup and regenerated if the images directory changes.
+    Return the cached image index from memory. No disk IO.
+    If no manifest is loaded yet, performs an initial incremental sync.
     The directory is configured via the IMAGES_DIRECTORY environment variable (defaults to "images").
 
     Returns:
@@ -127,10 +127,8 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
         - total_images: Total number of images found
         - images: List of image file information
     """
-    # Resolve the images directory path
     images_dir = get_images_directory()
 
-    # Check if directory exists
     if not images_dir.exists():
         raise HTTPException(
             status_code=404,
@@ -143,21 +141,54 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
             detail=f"Configured images path '{images_dir}' is not a directory"
         )
 
-    # Check cache validity
-    if is_cache_valid(images_dir):
-        cached = get_cached_images()
-        if cached is not None:
-            return cached
+    # Return from in-memory cache — no disk check on page load
+    cached = get_cached_images()
+    if cached is not None:
+        return cached
 
-    # Cache is invalid or empty, regenerate manifest
+    # No manifest loaded yet (fresh server start), do an initial sync
     try:
-        # init_manifest will update the cache and save to disk
-        result = init_manifest(images_dir)
+        result = sync_manifest(images_dir)
         return result
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate image manifest: {str(e)}"
+        )
+
+
+
+
+@router.post("/refresh")
+async def refresh_manifest(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+    """
+    Incrementally refresh the manifest by comparing filesystem state.
+    Stat-scans directories and only PIL-opens new/changed files.
+    """
+    images_dir = get_images_directory()
+    try:
+        result = sync_manifest(images_dir)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh manifest: {str(e)}"
+        )
+
+
+@router.post("/regenerate")
+async def regenerate_manifest_endpoint(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+    """
+    Full re-scan: PIL-open every image from scratch. Nuclear option.
+    """
+    images_dir = get_images_directory()
+    try:
+        result = regenerate_manifest(images_dir)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to regenerate manifest: {str(e)}"
         )
 
 

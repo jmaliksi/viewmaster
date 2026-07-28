@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import api
 from app.routers import sync as sync_router
-from app.cache import init_manifest, get_images_directory
+from app.cache import sync_manifest, get_images_directory
 
 app = FastAPI(
     title="ViewMaster API",
@@ -23,19 +23,19 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Generate manifest.json on server startup if needed"""
+    """Load existing manifest on startup. If missing, run incremental sync."""
     try:
-        from app.cache import is_cache_valid, load_manifest
+        from app.cache import load_manifest
 
         images_dir = get_images_directory()
         if images_dir.exists() and images_dir.is_dir():
-            # Try to load existing manifest
-            load_manifest()
-            # If cache is invalid (or no manifest), generate it
-            if not is_cache_valid(images_dir):
-                init_manifest(images_dir)
+            # Try to load existing manifest from disk
+            loaded = load_manifest()
+            # If no manifest on disk, perform an initial incremental sync
+            if loaded is None:
+                sync_manifest(images_dir)
     except Exception as e:
-        print(f"Warning: Failed to generate manifest on startup: {e}")
+        print(f"Warning: Failed to sync manifest on startup: {e}")
 
 # Configure CORS
 app.add_middleware(

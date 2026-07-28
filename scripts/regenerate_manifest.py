@@ -10,7 +10,7 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from app.cache import init_manifest, get_images_directory
+from app.cache import regenerate_manifest, get_images_directory
 
 def main():
     try:
@@ -25,7 +25,7 @@ def main():
             print(f"Error: Path is not a directory: {images_dir}")
             sys.exit(1)
 
-        result = init_manifest(images_dir)
+        result = regenerate_manifest(images_dir)
         print(f"Successfully regenerated manifest with {result['total_images']} images")
         print(f"Manifest saved to: {project_root}/manifest.json")
 
