@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Login from './Login.svelte';
-  import { isAuthenticated, authenticatedFetch, clearAuthCache } from './auth.js';
+  import { isAuthenticated, clearAuthCache } from './auth.js';
   import { fabric } from 'fabric';
   import Masonry from 'svelte-bricks';
   import SyncHost from './SyncHost.svelte';
@@ -68,6 +68,7 @@
 
   let currentPath = $state('/');
   let images = $state(null);
+  let fullImageList = $state(null);
   let currentImage = $state(null);
   let imageError = $state(null);
   let imageHistory = $state([]);
@@ -166,7 +167,7 @@
   let currentImageInfo = $derived.by(() => {
     if (!currentImage) return '';
 
-    const path = currentImage.path || currentImage.relative_path || '';
+    const path = currentImage.path || '';
     const filename = currentImage.filename;
 
     if (!path || !filename) {
@@ -503,12 +504,12 @@
 
   async function loadImages() {
     appMode = 'loading';
-    // Always fetch from API (no localStorage caching)
     imageError = null;
 
     try {
+      // Phase 1: fetch lightweight summary (no image list)
       const response = await fetch('/api/load', {
-        credentials: 'include', // Include cookies for authentication
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -516,13 +517,22 @@
       }
 
       const data = await response.json();
-
-      // Keep in memory only
       images = data;
-
-      // Extract parent folders and initialize checked folders
       extractFolders();
       appMode = 'start';
+
+      // Phase 2: fetch full image list in background
+      fetch('/api/load/images', { credentials: 'include' })
+        .then(r => {
+          if (!r.ok) throw new Error(`Failed to load image list: ${r.statusText}`);
+          return r.json();
+        })
+        .then(listData => {
+          fullImageList = listData;
+        })
+        .catch(err => {
+          console.error('Error loading full image list:', err);
+        });
     } catch (err) {
       console.error('Error loading images:', err);
       imageError = err.message || 'Failed to load images';
@@ -538,7 +548,9 @@
       });
       if (!response.ok) throw new Error(`Refresh failed: ${response.statusText}`);
       const data = await response.json();
-      images = data;
+      // Reconstruct summary from full manifest
+      images = buildSummaryFromManifest(data);
+      fullImageList = { total_images: data.total_images, images: data.images };
       extractFolders();
     } catch (err) {
       console.error('Error refreshing manifest:', err);
@@ -553,15 +565,46 @@
       });
       if (!response.ok) throw new Error(`Regenerate failed: ${response.statusText}`);
       const data = await response.json();
-      images = data;
+      // Reconstruct summary from full manifest
+      images = buildSummaryFromManifest(data);
+      fullImageList = { total_images: data.total_images, images: data.images };
       extractFolders();
     } catch (err) {
       console.error('Error regenerating manifest:', err);
     }
   }
 
+  function buildSummaryFromManifest(manifest) {
+    const folderMap = {};
+    const aspectRatios = {};
+
+    for (const img of manifest.images || []) {
+      const parts = (img.path || '').split('/');
+      if (parts.length > 1) {
+        const folder = parts[parts.length - 2];
+        if (!folderMap[folder]) {
+          folderMap[folder] = { count: 0, thumbnail_url: img.url };
+        }
+        folderMap[folder].count++;
+      }
+      const ar = img.aspect_ratio || 'unknown';
+      if (ar !== 'unknown') {
+        aspectRatios[ar] = (aspectRatios[ar] || 0) + 1;
+      }
+    }
+
+    return {
+      directory: manifest.directory,
+      total_images: manifest.total_images,
+      folders: Object.entries(folderMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, info]) => ({ name, ...info })),
+      aspect_ratios: aspectRatios,
+    };
+  }
+
   function extractFolders() {
-    if (!images || !images.images || images.images.length === 0) {
+    if (!images || !images.folders || images.folders.length === 0) {
       availableFolders = [];
       checkedFolders = new Set();
       folderThumbnails = new Map();
@@ -570,34 +613,15 @@
       return;
     }
 
-    const folders = new Set();
-    const thumbnails = new Map();
-    const aspectRatios = new Set();
-
-    images.images.forEach(img => {
-      const pathParts = (img.path || img.relative_path || '').split('/');
-      // If path has more than 1 part, it has a parent folder
-      if (pathParts.length > 1) {
-        const parentFolder = pathParts[pathParts.length - 2];
-        folders.add(parentFolder);
-        if (!thumbnails.has(parentFolder)) {
-          thumbnails.set(parentFolder, img.url);
-        }
-      }
-
-      // Extract aspect ratio
-      const aspectRatio = img.aspect_ratio || 'unknown';
-      aspectRatios.add(aspectRatio);
-    });
-
-    availableFolders = Array.from(folders).sort();
-    folderThumbnails = thumbnails;
+    // Populate from pre-computed summary data
+    availableFolders = images.folders.map(f => f.name);
+    folderThumbnails = new Map(images.folders.map(f => [f.name, f.thumbnail_url]));
 
     // Initialize all folders as checked
     checkedFolders = new Set(availableFolders);
 
-    // Extract available aspect ratios from the data
-    availableAspectRatios = Array.from(aspectRatios).sort();
+    // Aspect ratios come as { label: count } from summary
+    availableAspectRatios = Object.keys(images.aspect_ratios || {}).sort();
     checkedAspectRatios = new Set(availableAspectRatios);
 
     // Load and apply saved settings
@@ -705,7 +729,7 @@
 
   function getAlbumFromImage(image) {
     if (!image) return null;
-    const path = image.path || image.relative_path || '';
+    const path = image.path || '';
     const pathParts = path.split('/');
     // An image in the root has one path part (its name), or zero if path is empty.
     // A path like 'album/image.jpg' has two parts.
@@ -716,11 +740,18 @@
   }
 
   function initializeImagePlaylist() {
+    const imageList = fullImageList?.images;
+    if (!imageList || imageList.length === 0) {
+      imagePlaylist = [];
+      playlistIndex = 0;
+      return;
+    }
+
     // Filter images based on current checked folders and aspect ratios
     // This only runs once when user presses Start, not on every checkbox toggle
-    const filtered = images.images.filter(img => {
+    const filtered = imageList.filter(img => {
       // Always include root images (no parent folder)
-      const pathParts = (img.path || img.relative_path || '').split('/');
+      const pathParts = (img.path || '').split('/');
       if (pathParts.length <= 1) {
         return true;
       }
@@ -818,8 +849,13 @@
 
   function goToNextImage() {
     if (appMode === 'start') {
-      appMode = 'viewing';
       initializeImagePlaylist();
+      if (!imagePlaylist || imagePlaylist.length === 0) {
+        // Full image list not loaded yet — stay in start mode
+        appMode = 'start';
+        return;
+      }
+      appMode = 'viewing';
       timer.playing = true;
       startTimer();
     }
@@ -855,14 +891,15 @@
   }
 
   function getCurrentImageIndex() {
-    if (!currentImage || !images || !images.images) {
+    if (!currentImage || !fullImageList?.images) {
       return -1;
     }
-    return images.images.findIndex(img => img.url === currentImage.url);
+    return fullImageList.images.findIndex(img => img.url === currentImage.url);
   }
 
   function goToNextSequential() {
-    if (!images || !images.images || images.images.length === 0) {
+    const imageList = fullImageList?.images;
+    if (!imageList || imageList.length === 0) {
       return;
     }
     // Save current drawing before moving to next image
@@ -872,12 +909,12 @@
     const currentIndex = getCurrentImageIndex();
     if (currentIndex === -1) {
       // If current image not found, go to first image
-      currentImage = images.images[0];
+      currentImage = imageList[0];
       preloadAdjacentImages();
       return;
     }
-    const nextIndex = (currentIndex + 1) % images.images.length;
-    currentImage = images.images[nextIndex];
+    const nextIndex = (currentIndex + 1) % imageList.length;
+    currentImage = imageList[nextIndex];
     // Clear drawing canvas for next image
     if (fabricCanvas) {
       fabricCanvas.clear();
@@ -892,23 +929,24 @@
   }
 
   function goToPreviousSequential() {
-    if (!images || !images.images || images.images.length === 0) {
+    const imageList = fullImageList?.images;
+    if (!imageList || imageList.length === 0) {
       return;
     }
     const currentIndex = getCurrentImageIndex();
     if (currentIndex === -1) {
       // If current image not found, go to last image
-      currentImage = images.images[images.images.length - 1];
+      currentImage = imageList[imageList.length - 1];
       preloadAdjacentImages();
       return;
     }
-    const prevIndex = (currentIndex - 1 + images.images.length) % images.images.length;
-    currentImage = images.images[prevIndex];
+    const prevIndex = (currentIndex - 1 + imageList.length) % imageList.length;
+    currentImage = imageList[prevIndex];
     preloadAdjacentImages();
   }
 
   function openFromGallery(image) {
-    const imageFromList = images?.images?.find(img => img.url === image.url) || image;
+    const imageFromList = fullImageList?.images?.find(img => img.url === image.url) || image;
     const historyPosition = imageHistory.findIndex(img => img.url === imageFromList.url);
     
     if (historyPosition !== -1) {
@@ -1075,35 +1113,35 @@
 
   function preloadAdjacentImages() {
     if (appMode === 'drawing') return;
-    if (!images?.images || images.images.length === 0) return;
+    const imageList = fullImageList?.images;
+    if (!imageList || imageList.length === 0) return;
 
     const currentIndex = getCurrentImageIndex();
     if (currentIndex === -1) return;
 
-    const totalImages = images.images.length;
-    const bufferSize = 2; // preload 2 before and 2 after
+    const totalImages = imageList.length;
+    const bufferSize = 2;
 
-    // Preload a symmetric buffer around the current index
     for (let offset = 1; offset <= bufferSize; offset++) {
       const nextIndex = (currentIndex + offset) % totalImages;
       const prevIndex = (currentIndex - offset + totalImages) % totalImages;
-      preloadImage(images.images[nextIndex].url);
-      preloadImage(images.images[prevIndex].url);
+      preloadImage(imageList[nextIndex].url);
+      preloadImage(imageList[prevIndex].url);
     }
   }
 
   function preloadBatch(count = 3) {
-    if (!images?.images || images.images.length === 0) return;
+    const imageList = fullImageList?.images;
+    if (!imageList || imageList.length === 0) return;
 
     const currentIndex = getCurrentImageIndex();
     if (currentIndex === -1) return;
 
-    const totalImages = images.images.length;
+    const totalImages = imageList.length;
 
-    // Preload 'count' images ahead
     for (let i = 1; i <= count; i++) {
       const nextIndex = (currentIndex + i) % totalImages;
-      preloadImage(images.images[nextIndex].url);
+      preloadImage(imageList[nextIndex].url);
     }
   }
 
@@ -1223,12 +1261,12 @@
         currentImage: {
           url: img.url,
           filename: img.filename,
-          path: img.path || img.relative_path || '',
+          path: img.path || '',
         },
         nextImage: nextImg ? {
           url: nextImg.url,
           filename: nextImg.filename,
-          path: nextImg.path || nextImg.relative_path || '',
+          path: nextImg.path || '',
         } : null,
       });
     }
@@ -1274,7 +1312,7 @@
           <button
             class="play-pause-btn"
             onclick={togglePlayPause}
-            disabled={!images || !images.images || images.images.length === 0}
+            disabled={!fullImageList?.images?.length}
             aria-label={timer.playing ? 'Pause' : 'Play'}
           >
             {timer.playing ? '⏸' : '▶'}
@@ -1314,7 +1352,7 @@
           <button
             class="next-btn"
             onclick={goToNextImage}
-            disabled={!images || !images.images || images.images.length === 0}
+            disabled={!fullImageList?.images?.length}
             aria-label="Next"
           >
             <span style="display: flex; align-items: center; justify-content: center; height: 100%">&raquo;</span>
@@ -1536,7 +1574,7 @@
             class="arrow-btn left-arrow"
             class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToPreviousSequential}
-            disabled={!images || !images.images || images.images.length === 0}
+            disabled={!fullImageList?.images?.length}
             aria-label="Previous image"
           >
             ←
@@ -1561,13 +1599,13 @@
             class="arrow-btn right-arrow"
             class:inactive={!uiVisibility.mouseActive || (appMode === 'drawing' && !uiVisibility.showDuringDraw)}
             onclick={goToNextSequential}
-            disabled={!images || !images.images || images.images.length === 0}
+            disabled={!fullImageList?.images?.length}
             aria-label="Next image"
           >
             →
           </button>
         </figure>
-      {:else if images && images.images && images.images.length === 0}
+      {:else if fullImageList && fullImageList.images && fullImageList.images.length === 0}
         <p>No images available.</p>
       {:else}
         <p>Loading...</p>
@@ -1606,7 +1644,7 @@
       <button
         class="draw-toggle-btn"
         onclick={enterDrawingMode}
-        disabled={!images || !images.images || images.images.length === 0}
+        disabled={!fullImageList?.images?.length}
         aria-label="Enter drawing mode"
         title="Enter drawing mode (Esc to exit)"
       >✎ Draw</button>
@@ -1614,7 +1652,7 @@
         class="clear-draw-btn"
         onclick={clearDrawingCanvas}
         aria-label="Clear drawing"
-        disabled={!images || !images.images || images.images.length === 0}
+        disabled={!fullImageList?.images?.length}
       >Clear</button>
       <SyncHost />
     </div>

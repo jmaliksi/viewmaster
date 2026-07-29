@@ -18,7 +18,7 @@ from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     BEARER_TOKEN_COOKIE_NAME,
 )
-from app.cache import get_cached_images, sync_manifest, regenerate_manifest, load_manifest, MANIFEST_PATH, get_images_directory
+from app.cache import get_cached_images, sync_manifest, regenerate_manifest, load_manifest, MANIFEST_PATH, get_images_directory, build_summary, image_to_client
 
 router = APIRouter(prefix="/api", tags=["api"])
 security = HTTPBearer()
@@ -115,17 +115,18 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/load")
-async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+async def load_summary(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
-    Return the cached image index from memory. No disk IO.
+    Return a lightweight summary of the image index (no image list).
+    No disk IO — uses in-memory cache.
     If no manifest is loaded yet, performs an initial incremental sync.
-    The directory is configured via the IMAGES_DIRECTORY environment variable (defaults to "images").
 
     Returns:
         Dictionary containing:
         - directory: The scanned directory path
         - total_images: Total number of images found
-        - images: List of image file information
+        - folders: List of {name, count, thumbnail_url}
+        - aspect_ratios: {ratio_label: count, ...}
     """
     images_dir = get_images_directory()
 
@@ -141,15 +142,14 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
             detail=f"Configured images path '{images_dir}' is not a directory"
         )
 
-    # Return from in-memory cache — no disk check on page load
     cached = get_cached_images()
     if cached is not None:
-        return cached
+        return build_summary(images_dir, cached)
 
     # No manifest loaded yet (fresh server start), do an initial sync
     try:
-        result = sync_manifest(images_dir)
-        return result
+        manifest = sync_manifest(images_dir)
+        return build_summary(images_dir, manifest)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -157,6 +157,53 @@ async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[st
         )
 
 
+
+
+@router.get("/load/images")
+async def load_images(current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+    """
+    Return the full image list with client-safe fields (no internal/sync metadata).
+    No disk IO — uses in-memory cache.
+    If no manifest is loaded yet, performs an initial incremental sync.
+
+    Returns:
+        Dictionary containing:
+        - total_images: Total number of images found
+        - images: List of image file information (path, filename, url, width, height, aspect_ratio)
+    """
+    images_dir = get_images_directory()
+
+    if not images_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configured images directory '{images_dir}' does not exist"
+        )
+
+    if not images_dir.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Configured images path '{images_dir}' is not a directory"
+        )
+
+    cached = get_cached_images()
+    if cached is not None:
+        return {
+            "total_images": cached["total_images"],
+            "images": [image_to_client(img) for img in cached["images"]],
+        }
+
+    # No manifest loaded yet
+    try:
+        manifest = sync_manifest(images_dir)
+        return {
+            "total_images": manifest["total_images"],
+            "images": [image_to_client(img) for img in manifest["images"]],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate image manifest: {str(e)}"
+        )
 
 
 @router.post("/refresh")

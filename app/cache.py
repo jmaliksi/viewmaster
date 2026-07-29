@@ -258,5 +258,54 @@ def regenerate_manifest(images_dir: Path) -> Dict[str, Any]:
     return result
 
 
+# Fields to expose to the client (strip internal/sync fields)
+CLIENT_IMAGE_FIELDS = {"path", "filename", "url", "width", "height", "aspect_ratio"}
+
+
+def image_to_client(img: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip internal/sync-only fields from an image record for client consumption."""
+    return {k: v for k, v in img.items() if k in CLIENT_IMAGE_FIELDS}
+
+
+def build_summary(images_dir: Path, manifest: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a lightweight summary from the cached manifest (no image details).
+
+    Returns:
+        dict with "directory", "total_images", "folders", "aspect_ratios"
+        where "folders" is a list of {name, count, thumbnail_url}
+        and "aspect_ratios" is {ratio_label: count}.
+    """
+    images = manifest.get("images", [])
+
+    folder_map: Dict[str, dict] = {}
+    aspect_ratios: Dict[str, int] = {}
+
+    for img in images:
+        path_str = img.get("path", "")
+        parts = path_str.split("/")
+        if len(parts) > 1:
+            folder = parts[-2]
+            if folder not in folder_map:
+                folder_map[folder] = {"count": 0, "thumbnail_url": img.get("url", "")}
+            folder_map[folder]["count"] += 1
+
+        ar = img.get("aspect_ratio", "unknown")
+        if ar != "unknown":
+            aspect_ratios[ar] = aspect_ratios.get(ar, 0) + 1
+
+    folders = [
+        {"name": name, **info}
+        for name, info in sorted(folder_map.items())
+    ]
+
+    return {
+        "directory": str(images_dir),
+        "total_images": len(images),
+        "folders": folders,
+        "aspect_ratios": aspect_ratios,
+    }
+
+
 # Backward-compatible alias
 init_manifest = sync_manifest
