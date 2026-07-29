@@ -147,6 +147,7 @@ def sync_manifest(images_dir: Path) -> Dict[str, Any]:
     Also used for the initial cold-start (no existing manifest to compare).
     """
     global _cache
+    _cache = None
 
     if not images_dir.exists():
         raise ValueError(f"Images directory does not exist: {images_dir}")
@@ -217,6 +218,7 @@ def regenerate_manifest(images_dir: Path) -> Dict[str, Any]:
     Nuclear option for when sync state may be corrupted or a clean manifest is desired.
     """
     global _cache
+    _cache = None
 
     if not images_dir.exists():
         raise ValueError(f"Images directory does not exist: {images_dir}")

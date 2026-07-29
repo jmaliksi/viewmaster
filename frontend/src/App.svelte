@@ -71,6 +71,7 @@
   let fullImageList = $state(null);
   let currentImage = $state(null);
   let imageError = $state(null);
+  let imageLoading = $state(false);
   let imageHistory = $state([]);
   let historyIndex = $state(-1);
   let mouseTimeout = null;
@@ -541,6 +542,7 @@
   }
 
   async function handleRefresh() {
+    fullImageList = null;
     try {
       const response = await fetch('/api/refresh', {
         method: 'POST',
@@ -558,6 +560,7 @@
   }
 
   async function handleRegenerate() {
+    fullImageList = null;
     try {
       const response = await fetch('/api/regenerate', {
         method: 'POST',
@@ -1230,6 +1233,7 @@
   // Load image dimensions when current image changes
   $effect(() => {
     if (currentImage?.url) {
+      imageLoading = true;
       loadImageDimensions(currentImage.url);
     }
   });
@@ -1579,12 +1583,17 @@
           >
             ←
           </button>
+          {#if imageLoading}
+            <div class="spinner"></div>
+          {/if}
           <img
             src={cacheBust(currentImage.url)}
             alt={currentImage.filename}
             class="display-image"
             class:fill-mode={imageFitMode === 'fill'}
             style="opacity: {imageOpacity / 100}; object-fit: {imageFitMode === 'fill' ? 'cover' : 'contain'};"
+            onload={() => imageLoading = false}
+            onerror={() => imageLoading = false}
           />
           {#if imageDrawings[currentImage.url]}
             {@const drawing = imageDrawings[currentImage.url]}
