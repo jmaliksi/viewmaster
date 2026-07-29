@@ -6,6 +6,11 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+import starlette.middleware.gzip
+
+# Skip gzip for image/* — already compressed, CPU waste for ~0% gain
+starlette.middleware.gzip.DEFAULT_EXCLUDED_CONTENT_TYPES = ("text/event-stream", "image/")
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import api
